@@ -14,13 +14,13 @@ jobs:
     environment: dev
 
     env:
-      AWS_REGION: us-east-1
+      AWS_REGION: sa-east-1
       ROLE_TO_ASSUME: arn:aws:iam::<ACCOUNT_ID>:role/axcloud-lab-gha-deploy-role
 
-      S3_BUCKET: axcloud-lab-us-east-1-data
+      S3_BUCKET: axcloud-lab-sa-east-1-data
       LAMBDA_NAME: axcloud-lab-lambda-ingest
       GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
-      SNS_TOPIC_ARN: arn:aws:sns:us-east-1:<ACCOUNT_ID>:axcloud-lab-topic-ingest
+      SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:<ACCOUNT_ID>:axcloud-lab-topic-ingest
 
       SQL_S3_KEY: sql/dml/insert_curated_messages.sql
       GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
