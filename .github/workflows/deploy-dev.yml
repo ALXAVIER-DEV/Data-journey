@@ -14,7 +14,7 @@ jobs:
     uses: ./.github/workflows/terrform.yml
     with:
       environment: dev
-      aws-assume-role-arn: arn:aws:iam::<ACCOUNT_ID>:role/github-actions-deploy-role-axcloud
+      aws-assume-role-arn: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
       aws-region: sa-east-1
       aws-statefile-bucket: axcloud-lab-sa-east-1-terraform-state
       aws-lock-athena-table: axcloud_lab_terraform_locks
