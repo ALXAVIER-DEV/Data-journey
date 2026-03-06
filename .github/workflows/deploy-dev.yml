@@ -2,26 +2,28 @@ name: Deploy DEV
 
 on:
   push:
-    branches: [ "develop" ]
+    branches:
+      - develop
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: dev
+  terraform:
+    uses: ./.github/workflows/terrform.yml
+    with:
+      environment: dev
+      aws-assume-role-arn: arn:aws:iam::<ACCOUNT_ID>:role/github-actions-deploy-role-axcloud
+      aws-region: sa-east-1
+      aws-statefile-bucket: axcloud-lab-sa-east-1-terraform-state
+      aws-lock-athena-table: axcloud_lab_terraform_locks
 
     env:
-      AWS_REGION: sa-east-1
-      ROLE_TO_ASSUME: arn:aws:iam::<ACCOUNT_ID>:role/axcloud-lab-gha-deploy-role
-
       S3_BUCKET: axcloud-lab-sa-east-1-data
       LAMBDA_NAME: axcloud-lab-lambda-ingest
       GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
       SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:<ACCOUNT_ID>:axcloud-lab-topic-ingest
-
       SQL_S3_KEY: sql/dml/insert_curated_messages.sql
       GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
 
