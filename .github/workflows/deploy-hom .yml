@@ -1,0 +1,48 @@
+name: Deploy HOM
+
+on:
+  push:
+    branches: [ "approval" ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: hom
+
+    env:
+      AWS_REGION: us-east-1
+      LAMBDA_NAME:axcloud-ingest-lambda
+      S3_BUCKET:axcloud-lab-ingestion
+      SQL_KEY: sql/dml/insert_curated_messages.sql
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-deploy-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package Lambda
+        run: |
+          cd src/lambda_ingest
+          zip -r ../../lambda.zip . -x "*__pycache__*" "*.pytest_cache*"
+
+      - name: Deploy Lambda code
+        run: |
+          aws lambda update-function-code \
+            --function-name "${LAMBDA_NAME}" \
+            --zip-file "fileb://lambda.zip"
+
+      - name: Upload Athena DML to S3
+        run: |
+          aws s3 cp "athena/dml/insert_curated_messages.sql" "s3://${S3_BUCKET}/${SQL_KEY}"
+
+      - name: Update Glue Python Shell script
+        run: |
+          aws glue update-job --job-name "axcloud-glue-shell-job" --job-update "Command={Name=pythonshell,ScriptLocation=s3://${S3_BUCKET}/glue/python_shell/runner.py}"

@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  package-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zip Lambda (check)
+        run: |
+          cd src/lambda_ingest
+          zip -r ../../lambda.zip . -x "*__pycache__*" "*.pytest_cache*"
+          ls -lh ../../lambda.zip
+
+      - name: Validate SQL exists
+        run: |
+          test -f athena/dml/insert_curated_messages.sql
+          echo "SQL OK"
+
+      - name: Validate Glue script exists
+        run: |
+          test -f glue/python_shell/runner.py
+          echo "Glue script OK"

@@ -1,0 +1,60 @@
+name: Deploy PROD
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+
+    env:
+      AWS_REGION: us-east-1
+      ROLE_TO_ASSUME: arn:aws:iam::<ACCOUNT_ID>:role/axcloud-lab-gha-deploy-role
+
+      S3_BUCKET: axcloud-lab-us-east-1-data
+      LAMBDA_NAME: axcloud-lab-lambda-ingest
+      GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
+      SNS_TOPIC_ARN: arn:aws:sns:us-east-1:<ACCOUNT_ID>:axcloud-lab-topic-ingest
+
+      SQL_S3_KEY: sql/dml/insert_curated_messages.sql
+      GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package Lambda
+        run: |
+          cd src/lambda_ingest
+          zip -r ../../lambda.zip . -x "*__pycache__*" "*.pytest_cache*"
+
+      - name: Upload Athena DML to S3
+        run: |
+          aws s3 cp "athena/dml/insert_curated_messages.sql" "s3://${S3_BUCKET}/${SQL_S3_KEY}"
+
+      - name: Upload Glue script to S3
+        run: |
+          aws s3 cp "glue/python_shell/runner.py" "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}"
+
+      - name: Deploy Lambda code
+        run: |
+          aws lambda update-function-code \
+            --function-name "${LAMBDA_NAME}" \
+            --zip-file "fileb://lambda.zip"
+
+      - name: Update Glue Job script location
+        run: |
+          aws glue update-job \
+            --job-name "${GLUE_JOB_NAME}" \
+            --job-update "Command={Name=pythonshell,ScriptLocation=s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}}"
