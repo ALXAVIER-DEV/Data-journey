@@ -1,5 +1,6 @@
 resource "aws_s3_bucket" "data_bucket" {
-  bucket = "${var.environment}-axcloud-lab-${var.aws_region}-data"
+  count  = var.create_data_bucket ? 1 : 0
+  bucket = var.bucket_name
   
   tags = {
     Name        = var.bucket_name

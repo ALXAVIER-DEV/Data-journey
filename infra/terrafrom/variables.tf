@@ -2,6 +2,12 @@ variable "bucket_name" {
   type = string
 }
 
+variable "create_data_bucket" {
+  type        = bool
+  description = "Quando true, cria o bucket S3 de dados. Quando false, reutiliza bucket existente."
+  default     = true
+}
+
 variable "environment" {
     type = string
     description = "Ambiente de deploy (ex: dev, hom, prod)"
