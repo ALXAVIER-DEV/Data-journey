@@ -1,0 +1,10 @@
+name: "[FEAT] Build and PR"
+
+on:
+  push:
+    branches: [ "feature**" ]
+ 
+jobs:
+    feature-workflow:
+        - uses: actions/checkout@v4
+        secrets: inherit

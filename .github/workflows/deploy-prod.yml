@@ -15,12 +15,12 @@ jobs:
 
     env:
       AWS_REGION: us-east-1
-      ROLE_TO_ASSUME: arn:aws:iam::<ACCOUNT_ID>:role/axcloud-lab-gha-deploy-role
+      ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
 
       S3_BUCKET: axcloud-lab-us-east-1-data
       LAMBDA_NAME: axcloud-lab-lambda-ingest
       GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
-      SNS_TOPIC_ARN: arn:aws:sns:us-east-1:<ACCOUNT_ID>:axcloud-lab-topic-ingest
+      SNS_TOPIC_ARN: arn:aws:sns:us-east-1:584047610071:axcloud-lab-topic-ingest
 
       SQL_S3_KEY: sql/dml/insert_curated_messages.sql
       GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
@@ -32,7 +32,10 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+          output-env-credentials: true
 
       - name: Package Lambda
         run: |
