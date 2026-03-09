@@ -1,1 +1,3 @@
-bucket_name = "${var.environment}-axcloud-lab-sa-east-1-data"
+environment = "prod"
+bucket_name = "prod-axcloud-lab-sa-east-1-data"
+aws_region  = "sa-east-1"
