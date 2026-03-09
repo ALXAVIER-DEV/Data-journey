@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   terraform:
-    uses: ./.github/workflows/terrform.yml
+    uses: ./.github/workflows/terraform.yml
     with:
       environment: dev
       aws-assume-role-arn: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
@@ -19,11 +19,18 @@ jobs:
       aws-statefile-bucket: axcloud-lab-sa-east-1-terraform-state
       aws-lock-athena-table: axcloud_lab_terraform_locks
 
+  deploy:
+    runs-on: ubuntu-latest
+    needs: terraform
+    environment: dev
+
     env:
+      AWS_REGION: sa-east-1
+      ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
       S3_BUCKET: axcloud-lab-sa-east-1-data
       LAMBDA_NAME: axcloud-lab-lambda-ingest
       GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
-      SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:<ACCOUNT_ID>:axcloud-lab-topic-ingest
+      SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:584047610071:axcloud-lab-topic-ingest
       SQL_S3_KEY: sql/dml/insert_curated_messages.sql
       GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
 

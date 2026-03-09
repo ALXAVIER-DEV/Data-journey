@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "data_bucket" {
-  bucket = "${var.environment}-axcloud-lab-sa-east-1-data"
+  bucket = "${var.environment}-axcloud-lab-${var.aws_region}-data"
   
   tags = {
     Name        = var.bucket_name
