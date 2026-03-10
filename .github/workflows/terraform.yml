@@ -44,7 +44,12 @@ jobs:
       - name: Terraform Initialize
         run: |
           cd infra/terraform
-          terraform init -input=false
+          terraform init -input=false \
+            -backend-config="bucket=${{ inputs.aws-statefile-bucket }}" \
+            -backend-config="key=${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ inputs.aws-region }}" \
+            -backend-config="dynamodb_table=${{ inputs.aws-lock-athena-table }}" \
+            -backend-config="encrypt=true"
 
       - name: Terraform Validate
         run: |

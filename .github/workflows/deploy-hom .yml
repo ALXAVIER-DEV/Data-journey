@@ -3,7 +3,7 @@ name: Deploy HOM
 on:
   push:
     branches:
-      - homelop
+      - homologation
 
 permissions:
   id-token: write
