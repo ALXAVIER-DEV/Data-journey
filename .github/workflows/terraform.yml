@@ -50,7 +50,7 @@ jobs:
           LOCK_TABLE="${{ inputs.aws-lock-athena-table }}"
 
           if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
-            if [ "$REGION" = "us-east-1" ]; then
+            if [ "$REGION" = "sa-east-1" ]; then
               aws s3api create-bucket --bucket "$BUCKET"
             else
               aws s3api create-bucket \
