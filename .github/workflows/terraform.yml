@@ -43,24 +43,24 @@ jobs:
 
       - name: Terraform Initialize
         run: |
-          cd infra/terrafrom
+          cd infra/terraform
           terraform init -input=false
 
       - name: Terraform Validate
         run: |
-          cd infra/terrafrom
+          cd infra/terraform
           terraform validate
 
       - name: Terraform Plan
         id: terraform-plan
         run: |
-          cd infra/terrafrom
-          terraform workspace select  ${{ inputs.environment }}
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
           terraform plan -input=false -var-file="./modules/envs/${{ inputs.environment }}/terraform.tfvars" -out="${{ inputs.environment }}.plan"
 
       - name: Terraform Apply
         id: terraform-apply
         run: |
-          cd infra/terrafrom
+          cd infra/terraform
           terraform workspace select -or-create=true ${{ inputs.environment }}
           terraform apply -auto-approve -input=false "${{ inputs.environment }}.plan"
