@@ -148,10 +148,27 @@ jobs:
       - name: Update Glue Job script location
         run: |
           set -euo pipefail
+
+          # Busca a role atual do Glue Job para não perder a configuração
+          GLUE_ROLE=$(aws glue get-job \
+            --job-name "${GLUE_JOB_NAME}" \
+            --region "${AWS_REGION}" \
+            --query 'Job.Role' \
+            --output text)
+
+          echo "🔍 Role atual do Glue Job: $GLUE_ROLE"
+
           aws glue update-job \
             --job-name "${GLUE_JOB_NAME}" \
-            --job-update "Command={Name=pythonshell,ScriptLocation=s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}}" \
-            --region "${AWS_REGION}"
+            --region "${AWS_REGION}" \
+            --job-update "{
+              \"Role\": \"$GLUE_ROLE\",
+              \"Command\": {
+                \"Name\": \"pythonshell\",
+                \"ScriptLocation\": \"s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}\"
+              }
+            }"
+
           echo "✅ Glue Job atualizado: ${GLUE_JOB_NAME}"
 
       - name: Smoke test - publish SNS message
