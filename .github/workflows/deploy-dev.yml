@@ -33,41 +33,76 @@ jobs:
       SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:584047610071:axcloud-lab-topic-ingest
       SQL_S3_KEY: sql/dml/insert_curated_messages.sql
       GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
+      LAMBDA_S3_KEY: lambda/lambda.zip
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
 
-      - name: Package Lambda
+      # ✅ PASSO 1: Build e upload do ZIP — deve ser o primeiro
+      # O Terraform precisa do ZIP no S3 para criar a Lambda
+      - name: Build and upload Lambda ZIP
         run: |
-          cd src/lambda_ingest
-          zip -r ../../lambda.zip . -x "*__pycache__*" "*.pytest_cache*"
-          ls -lh ../../lambda.zip
+          set -euo pipefail
 
+          echo "📦 Criando ZIP da Lambda..."
+          cd src/lambda_ingest
+
+          if [ -f requirements.txt ]; then
+            echo "📥 Instalando dependências..."
+            pip install -r requirements.txt -t . --quiet
+          fi
+
+          zip -r ../../lambda.zip . \
+            -x "*.pyc" \
+            -x "*__pycache__*" \
+            -x "*.git*" \
+            -x "*.md"
+
+          cd ../..
+          ls -lh lambda.zip
+
+          echo "☁️ Enviando ZIP para S3..."
+          aws s3 cp lambda.zip \
+            "s3://${S3_BUCKET}/${LAMBDA_S3_KEY}" \
+            --region "${AWS_REGION}"
+
+          echo "✅ ZIP enviado: s3://${S3_BUCKET}/${LAMBDA_S3_KEY}"
+
+      # ✅ PASSO 2: Upload do SQL do Athena
       - name: Upload Athena DML to S3
         run: |
-          aws s3 cp "athena/dml/insert_curated_messages.sql" "s3://${S3_BUCKET}/${SQL_S3_KEY}"
+          set -euo pipefail
+          aws s3 cp "athena/dml/insert_curated_messages.sql" \
+            "s3://${S3_BUCKET}/${SQL_S3_KEY}" \
+            --region "${AWS_REGION}"
+          echo "✅ SQL enviado: s3://${S3_BUCKET}/${SQL_S3_KEY}"
 
+      # ✅ PASSO 3: Upload do script Glue
       - name: Upload Glue script to S3
         run: |
-          aws s3 cp "glue/python_shell/runner.py" "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}"
+          set -euo pipefail
+          aws s3 cp "glue/python_shell/runner.py" \
+            "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}" \
+            --region "${AWS_REGION}"
+          echo "✅ Glue script enviado: s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}"
 
-      # - name: Deploy Lambda code
-      #   run: |
-      #     aws lambda update-function-code \
-      #       --function-name "${LAMBDA_NAME}" \
-      #       --zip-file "fileb://lambda.zip"
-
+      # ✅ PASSO 4: Deploy da Lambda — atualiza código após Terraform garantir que existe
       - name: Deploy Lambda
         run: |
           set -euo pipefail
 
-          if aws lambda get-function --function-name "${LAMBDA_NAME}" --region "${AWS_REGION}" > /dev/null 2>&1; then
+          if aws lambda get-function \
+              --function-name "${LAMBDA_NAME}" \
+              --region "${AWS_REGION}" > /dev/null 2>&1; then
+
             echo "✅ Função existe. Atualizando código..."
             aws lambda update-function-code \
               --function-name "${LAMBDA_NAME}" \
@@ -80,19 +115,34 @@ jobs:
 
             echo "✅ Lambda atualizada com sucesso."
           else
-            echo "⚠️ Função não encontrada. Verifique se o Terraform foi aplicado antes deste step."
-            echo "::error::Lambda '${LAMBDA_NAME}' não existe em ${AWS_REGION}. Execute o Terraform apply primeiro."
+            echo "::error::Lambda '${LAMBDA_NAME}' não existe em ${AWS_REGION}. Verifique o Terraform apply."
             exit 1
           fi
 
+      # ✅ PASSO 5: Atualiza localização do script no Glue
       - name: Update Glue Job script location
         run: |
+          set -euo pipefail
           aws glue update-job \
             --job-name "${GLUE_JOB_NAME}" \
-            --job-update "Command={Name=pythonshell,ScriptLocation=s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}}"
+            --job-update "Command={Name=pythonshell,ScriptLocation=s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}}" \
+            --region "${AWS_REGION}"
+          echo "✅ Glue Job atualizado: ${GLUE_JOB_NAME}"
 
+      # ✅ PASSO 6: Smoke test — só roda se tudo anterior passou
       - name: Smoke test - publish SNS message
         run: |
-          aws sns publish \
+          set -euo pipefail
+          MESSAGE_ID=$(aws sns publish \
             --topic-arn "${SNS_TOPIC_ARN}" \
-            --message "{\"hello\":\"world\",\"from\":\"github-actions-dev\"}"
+            --message "{\"hello\":\"world\",\"from\":\"github-actions-dev\"}" \
+            --region "${AWS_REGION}" \
+            --query 'MessageId' \
+            --output text)
+          echo "✅ SNS publicado com sucesso. MessageId: $MESSAGE_ID"
+
+      # ✅ Notificação de falha
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Deploy DEV falhou. Verifique os logs acima."
