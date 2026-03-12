@@ -1,0 +1,42 @@
+[
+  {
+    "title": "Alinhar Lambda principal, handler e empacotamento",
+    "labels": ["backlog", "architecture", "high"],
+    "body": "## Contexto\nO repositório possui divergência entre o arquivo da Lambda, o handler configurado no Terraform e o empacotamento feito no GitHub Actions.\n\n## Objetivo\nDefinir uma única entrada da Lambda e alinhar código, Terraform e workflow.\n\n## Critérios de aceite\n- Existe um único arquivo/entrypoint oficial para a Lambda\n- O handler do Terraform aponta para o módulo correto\n- O workflow de deploy empacota exatamente o artefato usado em produção\n- O README documenta o entrypoint correto"
+  },
+  {
+    "title": "Implementar fluxo de ingestão raw para S3",
+    "labels": ["backlog", "data-ingestion", "high"],
+    "body": "## Contexto\nA arquitetura do README prevê normalização e escrita em camada raw no S3, mas esse fluxo não está fechado no código atual.\n\n## Objetivo\nImplementar a Lambda de ingestão para normalizar eventos e gravar JSON particionado na camada raw.\n\n## Critérios de aceite\n- A Lambda recebe o evento esperado\n- O payload é normalizado em schema consistente\n- O arquivo é salvo em S3 com particionamento por data\n- Existem testes unitários para payload válido e inválido"
+  },
+  {
+    "title": "Provisionar SQS e trigger da Lambda no Terraform",
+    "labels": ["backlog", "infra", "high"],
+    "body": "## Contexto\nO fluxo SNS -> SQS -> Lambda está descrito, mas não está materializado de forma clara no Terraform atual.\n\n## Objetivo\nAdicionar os recursos de mensageria e integração necessários para o fluxo orientado a eventos.\n\n## Critérios de aceite\n- Existe fila SQS provisionada no Terraform\n- Existe subscription do SNS para a fila\n- Existe event source mapping da SQS para a Lambda\n- As permissões IAM cobrem consumo e processamento da fila"
+  },
+  {
+    "title": "Criar suíte mínima de testes para app e empacotamento",
+    "labels": ["backlog", "quality", "high"],
+    "body": "## Contexto\nO projeto não possui quality gates mínimos para a aplicação e o artefato da Lambda.\n\n## Objetivo\nCriar testes básicos e validação automática no CI.\n\n## Critérios de aceite\n- Existem testes unitários para normalização\n- Existe teste para escrita no S3 com mocks\n- Existe validação do artefato empacotado da Lambda\n- O pipeline executa os testes em pull requests"
+  },
+  {
+    "title": "Atualizar README para refletir a arquitetura real",
+    "labels": ["backlog", "documentation", "medium"],
+    "body": "## Contexto\nA documentação atual descreve arquivos, pastas e fluxo que não batem com o código versionado.\n\n## Objetivo\nSincronizar README com o estado real do projeto e com o desenho desejado.\n\n## Critérios de aceite\n- A árvore do repositório está correta\n- O fluxo de dados documentado corresponde ao código atual\n- Os comandos de deploy e operação estão atualizados\n- Há uma seção clara de limitações e próximos passos"
+  },
+  {
+    "title": "Padronizar workflows por ambiente e nomenclatura",
+    "labels": ["backlog", "devops", "medium"],
+    "body": "## Contexto\nOs workflows têm inconsistências de naming e manutenção, incluindo arquivo com espaço no nome.\n\n## Objetivo\nPadronizar nomenclatura, reutilização e legibilidade dos pipelines.\n\n## Critérios de aceite\n- Os arquivos de workflow seguem padrão de nomes sem ambiguidades\n- A lógica compartilhada entre ambientes está centralizada\n- O processo de deploy de dev, hom e prod está documentado\n- O repositório não contém arquivos de workflow obsoletos"
+  },
+  {
+    "title": "Adicionar observabilidade mínima para ingestão e Glue",
+    "labels": ["backlog", "observability", "medium"],
+    "body": "## Contexto\nO projeto depende de logs padrão, sem convenções de correlação, métricas de falha ou runbook mínimo.\n\n## Objetivo\nMelhorar visibilidade operacional do pipeline.\n\n## Critérios de aceite\n- A Lambda produz logs estruturados\n- O Glue registra início, fim e status das queries\n- Existe documentação de troubleshooting básico\n- Há indicadores mínimos para falha de ingestão"
+  },
+  {
+    "title": "Versionar DDLs e exemplos operacionais do Athena",
+    "labels": ["backlog", "analytics", "low"],
+    "body": "## Contexto\nO repositório já possui DML, mas faltam DDLs e exemplos operacionais para tornar a camada analítica reproduzível.\n\n## Objetivo\nCompletar os artefatos SQL e exemplos de uso do Athena.\n\n## Critérios de aceite\n- O repositório contém DDL da camada raw\n- O repositório contém DDL da camada curated\n- Existem exemplos de execução e payload de teste\n- O README referencia os scripts corretos"
+  }
+]

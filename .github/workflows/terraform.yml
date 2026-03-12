@@ -1,0 +1,201 @@
+name: "Terraform Workflow"
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      aws-assume-role-arn:
+        type: string
+        required: true
+      aws-region:
+        type: string
+        required: true
+      aws-statefile-bucket:
+        type: string
+        required: true
+      aws-lock-athena-table:
+        type: string
+        required: true
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: terraform-${{ inputs.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.3
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ inputs.aws-assume-role-arn }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Ensure Terraform backend exists
+        run: |
+          set -euo pipefail
+
+          BUCKET="${{ inputs.aws-statefile-bucket }}"
+          REGION="${{ inputs.aws-region }}"
+          LOCK_TABLE="${{ inputs.aws-lock-athena-table }}"
+          DDB_LOCK_ENABLED="false"
+
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            if [ "$REGION" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "$BUCKET"
+            else
+              aws s3api create-bucket \
+                --bucket "$BUCKET" \
+                --create-bucket-configuration LocationConstraint="$REGION"
+            fi
+            aws s3api wait bucket-exists --bucket "$BUCKET"
+          fi
+
+          if aws dynamodb describe-table --table-name "$LOCK_TABLE" --region "$REGION" >/dev/null 2>&1; then
+            DDB_LOCK_ENABLED="true"
+          else
+            DDB_ERR="$(aws dynamodb describe-table --table-name "$LOCK_TABLE" --region "$REGION" 2>&1 || true)"
+            if echo "$DDB_ERR" | grep -q "ResourceNotFoundException"; then
+              CREATE_ERR_FILE="$(mktemp)"
+              if aws dynamodb create-table \
+                --table-name "$LOCK_TABLE" \
+                --attribute-definitions AttributeName=LockID,AttributeType=S \
+                --key-schema AttributeName=LockID,KeyType=HASH \
+                --billing-mode PAY_PER_REQUEST \
+                --region "$REGION" >/dev/null 2>"$CREATE_ERR_FILE"; then
+                aws dynamodb wait table-exists --table-name "$LOCK_TABLE" --region "$REGION"
+                DDB_LOCK_ENABLED="true"
+              else
+                CREATE_ERR="$(cat "$CREATE_ERR_FILE")"
+                if echo "$CREATE_ERR" | grep -q "AccessDeniedException"; then
+                  echo "Warning: sem permissão para criar tabela DynamoDB. Continuando sem state locking."
+                  DDB_LOCK_ENABLED="false"
+                else
+                  echo "$CREATE_ERR"
+                  exit 1
+                fi
+              fi
+              rm -f "$CREATE_ERR_FILE"
+            elif echo "$DDB_ERR" | grep -q "AccessDeniedException"; then
+              echo "Warning: sem permissão para descrever tabela DynamoDB. Continuando sem state locking."
+              DDB_LOCK_ENABLED="false"
+            else
+              echo "$DDB_ERR"
+              exit 1
+            fi
+          fi
+
+          echo "TF_DDB_LOCK_ENABLED=$DDB_LOCK_ENABLED" >> "$GITHUB_ENV"
+          echo "TF_DDB_LOCK_TABLE=$LOCK_TABLE"         >> "$GITHUB_ENV"
+
+      - name: Terraform Initialize
+        run: |
+          cd infra/terraform
+          if [ "${TF_DDB_LOCK_ENABLED}" = "true" ]; then
+            terraform init -input=false \
+              -backend-config="bucket=${{ inputs.aws-statefile-bucket }}" \
+              -backend-config="key=${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate" \
+              -backend-config="region=${{ inputs.aws-region }}" \
+              -backend-config="dynamodb_table=${TF_DDB_LOCK_TABLE}" \
+              -backend-config="encrypt=true"
+          else
+            terraform init -input=false \
+              -backend-config="bucket=${{ inputs.aws-statefile-bucket }}" \
+              -backend-config="key=${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate" \
+              -backend-config="region=${{ inputs.aws-region }}" \
+              -backend-config="encrypt=true"
+          fi
+
+      - name: Terraform Validate
+        run: |
+          cd infra/terraform
+          terraform validate
+
+      - name: Import existing resources
+        run: |
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+
+          DATA_BUCKET="axcloud-lab-${{ inputs.aws-region }}-data"
+
+          if ! terraform state show 'aws_s3_bucket.data_bucket[0]' > /dev/null 2>&1; then
+            if aws s3api head-bucket --bucket "$DATA_BUCKET" 2>/dev/null; then
+              echo "Importando bucket existente: $DATA_BUCKET"
+              terraform import 'aws_s3_bucket.data_bucket[0]' "$DATA_BUCKET"
+            else
+              echo "Bucket $DATA_BUCKET não existe na AWS. Será criado pelo Terraform."
+            fi
+          else
+            echo "aws_s3_bucket.data_bucket[0] já está no state. Pulando import."
+          fi
+
+      # ✅ FIX: Force-unlock de locks fantasmas antes do Plan
+      - name: Force unlock stale state lock
+        if: env.TF_DDB_LOCK_ENABLED == 'true'
+        run: |
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+
+          LOCK_KEY="${{ inputs.aws-statefile-bucket }}/env:/${{ inputs.environment }}/${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate"
+
+          LOCK_ITEM=$(aws dynamodb get-item \
+            --table-name "${{ inputs.aws-lock-athena-table }}" \
+            --region "${{ inputs.aws-region }}" \
+            --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}" \
+            --query 'Item' \
+            --output json 2>/dev/null || echo "null")
+
+          if [ "$LOCK_ITEM" != "null" ] && [ -n "$LOCK_ITEM" ]; then
+            LOCK_ID=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.ID // empty' 2>/dev/null || echo "")
+            CREATED=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.Created // empty' 2>/dev/null || echo "desconhecido")
+            echo "⚠️ Lock fantasma detectado. Criado em: $CREATED"
+
+            if [ -n "$LOCK_ID" ]; then
+              terraform force-unlock -force "$LOCK_ID"
+              echo "✅ Lock removido via terraform force-unlock: $LOCK_ID"
+            else
+              aws dynamodb delete-item \
+                --table-name "${{ inputs.aws-lock-athena-table }}" \
+                --region "${{ inputs.aws-region }}" \
+                --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}"
+              echo "✅ Lock removido diretamente no DynamoDB."
+            fi
+          else
+            echo "✅ Nenhum lock ativo encontrado. Prosseguindo."
+          fi
+
+      - name: Terraform Plan
+        id: terraform-plan
+        run: |
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+          terraform plan \
+            -input=false \
+            -var-file="./modules/envs/${{ inputs.environment }}/terraform.tfvars" \
+            -out="${{ inputs.environment }}.plan"
+
+      - name: Terraform Apply
+        id: terraform-apply
+        run: |
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+          terraform apply -auto-approve -input=false "${{ inputs.environment }}.plan"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Terraform falhou no ambiente ${{ inputs.environment }}"
+          echo "::error::Verifique os logs acima para detalhes do erro"
