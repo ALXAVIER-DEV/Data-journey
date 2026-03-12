@@ -12,6 +12,25 @@ Este diretório contém um backlog inicial derivado da análise do repositório.
 - GitHub CLI autenticado com permissão no repositório
 - labels já existentes ou permissão para criá-las manualmente antes
 
+Validação rápida:
+
+```powershell
+gh --version
+gh auth status
+```
+
+Se `gh` não estiver instalado no Windows:
+
+```powershell
+winget install --id GitHub.cli
+```
+
+Se estiver instalado, mas sem login:
+
+```powershell
+gh auth login
+```
+
 ## Uso
 
 Criar issues no repositório remoto detectado a partir do `origin`:
@@ -38,3 +57,9 @@ Criar issues e adicionar ao GitHub Project:
 ## Observação
 
 Os cards foram gerados a partir do código local. Se o board atual no GitHub já tiver itens parecidos, revise o JSON antes de executar o script para evitar duplicidade.
+
+O script agora valida automaticamente:
+
+- se o `gh` está instalado
+- se existe autenticação válida no GitHub CLI
+- se o arquivo de cards existe

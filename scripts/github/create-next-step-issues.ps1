@@ -7,6 +7,37 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Test-GitHubCliInstalled {
+    $command = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $command) {
+        throw @"
+GitHub CLI ('gh') nao foi encontrado no PATH.
+
+Instale o GitHub CLI e reabra o PowerShell:
+- winget install --id GitHub.cli
+- ou choco install gh
+
+Depois autentique:
+- gh auth login
+"@
+    }
+}
+
+function Test-GitHubAuth {
+    $authOutput = & gh auth status 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw @"
+GitHub CLI encontrado, mas sem autenticacao valida.
+
+Execute:
+- gh auth login
+
+Detalhe:
+$authOutput
+"@
+    }
+}
+
 function Get-DefaultRepo {
     $remote = git remote get-url origin 2>$null
     if (-not $remote) {
@@ -23,6 +54,9 @@ function Get-DefaultRepo {
 if (-not $Repo) {
     $Repo = Get-DefaultRepo
 }
+
+Test-GitHubCliInstalled
+Test-GitHubAuth
 
 if (-not (Test-Path $CardsFile)) {
     throw "Arquivo de cards nao encontrado: $CardsFile"
