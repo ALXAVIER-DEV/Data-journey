@@ -1,36 +1,49 @@
-variable "bucket_name" {
+variable "lambda_function_name" {
   type        = string
-  description = "Nome do bucket S3 de dados"
+  description = "Nome da função Lambda"
+}
+
+variable "lambda_handler" {
+  type        = string
+  description = "Handler da Lambda (ex: main.handler)"
+  default     = "main.handler"
+}
+
+variable "lambda_timeout" {
+  type        = number
+  description = "Timeout da Lambda em segundos"
+  default     = 60
 
   validation {
-    condition     = length(var.bucket_name) > 0
-    error_message = "O nome do bucket não pode ser vazio."
+    condition     = var.lambda_timeout >= 1 && var.lambda_timeout <= 900
+    error_message = "O timeout deve estar entre 1 e 900 segundos."
   }
 }
 
-variable "create_data_bucket" {
-  type        = bool
-  description = "Quando true, cria o bucket S3 de dados. Quando false, reutiliza bucket existente."
-  default     = true
-}
-
-variable "environment" {
-  type        = string
-  description = "Ambiente de deploy (ex: dev, hom, prod)"
+variable "lambda_memory_size" {
+  type        = number
+  description = "Memória alocada para a Lambda em MB"
+  default     = 128
 
   validation {
-    condition     = contains(["dev", "hom", "prod"], var.environment)
-    error_message = "O ambiente deve ser um dos valores: dev, hom, prod."
+    condition     = contains([128, 256, 512, 1024, 2048, 3008], var.lambda_memory_size)
+    error_message = "O memory_size deve ser um dos valores: 128, 256, 512, 1024, 2048, 3008."
   }
 }
 
-variable "aws_region" {
+variable "lambda_s3_key" {
   type        = string
-  description = "Região AWS onde os recursos serão provisionados"
-  default     = "sa-east-1"
+  description = "Caminho do ZIP da Lambda no bucket S3 (ex: lambda/lambda.zip)"
+}
 
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
-    error_message = "A região deve estar no formato AWS válido (ex: sa-east-1, us-east-1)."
-  }
+variable "sns_topic_arn" {
+  type        = string
+  description = "ARN do tópico SNS usado pela Lambda"
+  default     = ""
+}
+
+variable "glue_job_name" {
+  type        = string
+  description = "Nome do Glue Job acionado pela Lambda"
+  default     = ""
 }

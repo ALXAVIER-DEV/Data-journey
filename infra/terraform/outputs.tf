@@ -33,3 +33,23 @@ output "environment" {
   description = "Ambiente do deployment"
   value       = terraform.workspace
 }
+
+output "lambda_function_name" {
+  description = "Nome da função Lambda de ingestão"
+  value       = aws_lambda_function.ingest.function_name
+}
+
+output "lambda_function_arn" {
+  description = "ARN da função Lambda"
+  value       = aws_lambda_function.ingest.arn
+}
+
+output "lambda_invoke_arn" {
+  description = "ARN de invocação da Lambda"
+  value       = aws_lambda_function.ingest.invoke_arn
+}
+
+output "lambda_role_arn" {
+  description = "ARN da role IAM da Lambda"
+  value       = aws_iam_role.lambda_exec.arn
+}
