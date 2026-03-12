@@ -130,3 +130,31 @@ resource "aws_lambda_function" "ingest" {
 
   depends_on = [aws_iam_role_policy.lambda_permissions]
 }
+
+# ============================================================
+# Glue Job
+# ============================================================
+resource "aws_glue_job" "athena_exec" {
+  name         = var.glue_job_name
+  role_arn     = var.glue_role_arn
+  glue_version = "3.0"
+
+  command {
+    name            = "pythonshell"
+    python_version  = "3.9"
+    script_location = "s3://${var.bucket_name}/${var.glue_script_s3_key}"
+  }
+
+  default_arguments = {
+    "--job-language"        = "python"
+    "--TempDir"             = "s3://${var.bucket_name}/tmp/glue/"
+    "--enable-job-insights" = "true"
+  }
+
+  max_capacity = 0.0625  # mínimo para Python Shell
+
+  tags = {
+    Name        = var.glue_job_name
+    Environment = var.environment
+  }
+}

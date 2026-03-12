@@ -53,3 +53,13 @@ output "lambda_role_arn" {
   description = "ARN da role IAM da Lambda"
   value       = aws_iam_role.lambda_exec.arn
 }
+
+output "glue_job_name" {
+  description = "Nome do Glue Job"
+  value       = aws_glue_job.athena_exec.name
+}
+
+output "glue_job_arn" {
+  description = "ARN do Glue Job"
+  value       = "arn:aws:glue:${var.aws_region}:${data.aws_caller_identity.current.account_id}:job/${aws_glue_job.athena_exec.name}"
+}
