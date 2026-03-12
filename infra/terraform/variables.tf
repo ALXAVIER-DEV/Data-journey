@@ -80,16 +80,6 @@ variable "glue_job_name" {
   default     = ""
 }
 
-variable "glue_role_arn" {
-  type        = string
-  description = "ARN da role IAM existente para o Glue Job"
-
-  validation {
-    condition     = can(regex("^arn:aws:iam::[0-9]{12}:role/.+", var.glue_role_arn))
-    error_message = "O glue_role_arn deve ser um ARN IAM valido."
-  }
-}
-
 variable "glue_script_s3_key" {
   type        = string
   description = "Caminho do script Glue no bucket S3"
