@@ -57,11 +57,33 @@ jobs:
         run: |
           aws s3 cp "glue/python_shell/runner.py" "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}"
 
-      - name: Deploy Lambda code
+      # - name: Deploy Lambda code
+      #   run: |
+      #     aws lambda update-function-code \
+      #       --function-name "${LAMBDA_NAME}" \
+      #       --zip-file "fileb://lambda.zip"
+
+      - name: Deploy Lambda
         run: |
-          aws lambda update-function-code \
-            --function-name "${LAMBDA_NAME}" \
-            --zip-file "fileb://lambda.zip"
+          set -euo pipefail
+
+          if aws lambda get-function --function-name "${LAMBDA_NAME}" --region "${AWS_REGION}" > /dev/null 2>&1; then
+            echo "✅ Função existe. Atualizando código..."
+            aws lambda update-function-code \
+              --function-name "${LAMBDA_NAME}" \
+              --zip-file "fileb://lambda.zip" \
+              --region "${AWS_REGION}"
+
+            aws lambda wait function-updated \
+              --function-name "${LAMBDA_NAME}" \
+              --region "${AWS_REGION}"
+
+            echo "✅ Lambda atualizada com sucesso."
+          else
+            echo "⚠️ Função não encontrada. Verifique se o Terraform foi aplicado antes deste step."
+            echo "::error::Lambda '${LAMBDA_NAME}' não existe em ${AWS_REGION}. Execute o Terraform apply primeiro."
+            exit 1
+          fi
 
       - name: Update Glue Job script location
         run: |
