@@ -21,6 +21,10 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    # ✅ FIX 5: Concurrency para evitar race condition entre runs paralelos
+    concurrency:
+      group: terraform-${{ inputs.environment }}
+      cancel-in-progress: false
     defaults:
       run:
         shell: bash
@@ -50,6 +54,8 @@ jobs:
           LOCK_TABLE="${{ inputs.aws-lock-athena-table }}"
           DDB_LOCK_ENABLED="false"
 
+          # ✅ FIX 1: Lógica de região corrigida
+          # us-east-1 é o ÚNICO que NÃO aceita LocationConstraint
           if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
             if [ "$REGION" = "us-east-1" ]; then
               aws s3api create-bucket --bucket "$BUCKET"
@@ -78,7 +84,7 @@ jobs:
               else
                 CREATE_ERR="$(cat "$CREATE_ERR_FILE")"
                 if echo "$CREATE_ERR" | grep -q "AccessDeniedException"; then
-                  echo "Warning: no permission to create DynamoDB lock table. Continuing without state locking."
+                  echo "Warning: sem permissão para criar tabela DynamoDB. Continuando sem state locking."
                   DDB_LOCK_ENABLED="false"
                 else
                   echo "$CREATE_ERR"
@@ -87,7 +93,7 @@ jobs:
               fi
               rm -f "$CREATE_ERR_FILE"
             elif echo "$DDB_ERR" | grep -q "AccessDeniedException"; then
-              echo "Warning: no permission to describe DynamoDB lock table. Continuing without state locking."
+              echo "Warning: sem permissão para descrever tabela DynamoDB. Continuando sem state locking."
               DDB_LOCK_ENABLED="false"
             else
               echo "$DDB_ERR"
@@ -121,12 +127,35 @@ jobs:
           cd infra/terraform
           terraform validate
 
+      # ✅ FIX 2 e 3: Import de recursos existentes ANTES do Plan
+      - name: Import existing resources
+        run: |
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+
+          DATA_BUCKET="axcloud-lab-${{ inputs.aws-region }}-data"
+
+          if ! terraform state show 'aws_s3_bucket.data_bucket[0]' > /dev/null 2>&1; then
+            # Verifica se o bucket existe na AWS antes de tentar importar
+            if aws s3api head-bucket --bucket "$DATA_BUCKET" 2>/dev/null; then
+              echo "Importando bucket existente: $DATA_BUCKET"
+              terraform import 'aws_s3_bucket.data_bucket[0]' "$DATA_BUCKET"
+            else
+              echo "Bucket $DATA_BUCKET não existe na AWS. Será criado pelo Terraform."
+            fi
+          else
+            echo "aws_s3_bucket.data_bucket[0] já está no state. Pulando import."
+          fi
+
       - name: Terraform Plan
         id: terraform-plan
         run: |
           cd infra/terraform
           terraform workspace select -or-create=true ${{ inputs.environment }}
-          terraform plan -input=false -var-file="./modules/envs/${{ inputs.environment }}/terraform.tfvars" -out="${{ inputs.environment }}.plan"
+          terraform plan \
+            -input=false \
+            -var-file="./modules/envs/${{ inputs.environment }}/terraform.tfvars" \
+            -out="${{ inputs.environment }}.plan"
 
       - name: Terraform Apply
         id: terraform-apply
@@ -134,3 +163,10 @@ jobs:
           cd infra/terraform
           terraform workspace select -or-create=true ${{ inputs.environment }}
           terraform apply -auto-approve -input=false "${{ inputs.environment }}.plan"
+
+      # ✅ FIX 6: Notificação de falha
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Terraform falhou no ambiente ${{ inputs.environment }}"
+          echo "::error::Verifique os logs acima para detalhes do erro"
