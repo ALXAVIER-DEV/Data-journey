@@ -10,27 +10,16 @@ permissions:
   contents: read
 
 jobs:
-  terraform:
-    uses: ./.github/workflows/terraform.yml
-    with:
-      environment: dev
-      aws-assume-role-arn: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
-      aws-region: sa-east-1
-      aws-statefile-bucket: axcloud-lab-sa-east-1-terraform-state
-      aws-lock-athena-table: axcloud_lab_terraform_locks
 
-  deploy:
+  # ✅ JOB 1: Build e upload dos artefatos — roda ANTES do Terraform
+  upload-artifacts:
     runs-on: ubuntu-latest
-    needs: terraform
     environment: dev
 
     env:
       AWS_REGION: sa-east-1
       ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
       S3_BUCKET: axcloud-lab-sa-east-1-data
-      LAMBDA_NAME: axcloud-lab-lambda-ingest
-      GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
-      SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:584047610071:axcloud-lab-topic-ingest
       SQL_S3_KEY: sql/dml/insert_curated_messages.sql
       GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
       LAMBDA_S3_KEY: lambda/lambda.zip
@@ -46,8 +35,6 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
 
-      # ✅ PASSO 1: Build e upload do ZIP — deve ser o primeiro
-      # O Terraform precisa do ZIP no S3 para criar a Lambda
       - name: Build and upload Lambda ZIP
         run: |
           set -euo pipefail
@@ -76,7 +63,6 @@ jobs:
 
           echo "✅ ZIP enviado: s3://${S3_BUCKET}/${LAMBDA_S3_KEY}"
 
-      # ✅ PASSO 2: Upload do SQL do Athena
       - name: Upload Athena DML to S3
         run: |
           set -euo pipefail
@@ -85,7 +71,6 @@ jobs:
             --region "${AWS_REGION}"
           echo "✅ SQL enviado: s3://${S3_BUCKET}/${SQL_S3_KEY}"
 
-      # ✅ PASSO 3: Upload do script Glue
       - name: Upload Glue script to S3
         run: |
           set -euo pipefail
@@ -94,7 +79,43 @@ jobs:
             --region "${AWS_REGION}"
           echo "✅ Glue script enviado: s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}"
 
-      # ✅ PASSO 4: Deploy da Lambda — atualiza código após Terraform garantir que existe
+  # ✅ JOB 2: Terraform — roda APÓS os artefatos estarem no S3
+  terraform:
+    needs: upload-artifacts
+    uses: ./.github/workflows/terraform.yml
+    with:
+      environment: dev
+      aws-assume-role-arn: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
+      aws-region: sa-east-1
+      aws-statefile-bucket: axcloud-lab-sa-east-1-terraform-state
+      aws-lock-athena-table: axcloud_lab_terraform_locks
+
+  # ✅ JOB 3: Deploy — roda APÓS o Terraform garantir que os recursos existem
+  deploy:
+    runs-on: ubuntu-latest
+    needs: terraform
+    environment: dev
+
+    env:
+      AWS_REGION: sa-east-1
+      ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
+      S3_BUCKET: axcloud-lab-sa-east-1-data
+      LAMBDA_NAME: axcloud-lab-lambda-ingest
+      GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
+      SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:584047610071:axcloud-lab-topic-ingest
+      GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+
       - name: Deploy Lambda
         run: |
           set -euo pipefail
@@ -104,6 +125,11 @@ jobs:
               --region "${AWS_REGION}" > /dev/null 2>&1; then
 
             echo "✅ Função existe. Atualizando código..."
+
+            # Faz o download do ZIP que foi enviado no job anterior
+            aws s3 cp "s3://axcloud-lab-sa-east-1-data/lambda/lambda.zip" \
+              lambda.zip --region "${AWS_REGION}"
+
             aws lambda update-function-code \
               --function-name "${LAMBDA_NAME}" \
               --zip-file "fileb://lambda.zip" \
@@ -115,11 +141,10 @@ jobs:
 
             echo "✅ Lambda atualizada com sucesso."
           else
-            echo "::error::Lambda '${LAMBDA_NAME}' não existe em ${AWS_REGION}. Verifique o Terraform apply."
+            echo "::error::Lambda '${LAMBDA_NAME}' não existe em ${AWS_REGION}."
             exit 1
           fi
 
-      # ✅ PASSO 5: Atualiza localização do script no Glue
       - name: Update Glue Job script location
         run: |
           set -euo pipefail
@@ -129,7 +154,6 @@ jobs:
             --region "${AWS_REGION}"
           echo "✅ Glue Job atualizado: ${GLUE_JOB_NAME}"
 
-      # ✅ PASSO 6: Smoke test — só roda se tudo anterior passou
       - name: Smoke test - publish SNS message
         run: |
           set -euo pipefail
@@ -139,9 +163,8 @@ jobs:
             --region "${AWS_REGION}" \
             --query 'MessageId' \
             --output text)
-          echo "✅ SNS publicado com sucesso. MessageId: $MESSAGE_ID"
+          echo "✅ SNS publicado. MessageId: $MESSAGE_ID"
 
-      # ✅ Notificação de falha
       - name: Notify on failure
         if: failure()
         run: |
