@@ -1,3 +1,10 @@
+variable "aws_region" {
+  type        = string
+  description = "Região AWS para o deployment"
+  default     = "sa-east-1"
+  
+}
+
 variable "lambda_function_name" {
   type        = string
   description = "Nome da função Lambda"
