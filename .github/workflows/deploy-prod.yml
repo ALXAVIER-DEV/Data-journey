@@ -1,16 +1,75 @@
 name: Deploy PROD
 
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches:
       - main
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
+  upload-artifacts:
+    runs-on: ubuntu-latest
+    environment: prod
+
+    env:
+      AWS_REGION: sa-east-1
+      ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
+      S3_BUCKET: prod-axcloud-lab-sa-east-1-data
+      SQL_S3_KEY: sql/dml/insert_curated_messages.sql
+      GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
+      LAMBDA_S3_KEY: lambda/lambda.zip
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+
+      - name: Build and upload Lambda ZIP
+        run: |
+          set -euo pipefail
+          cd src/lambda_ingest
+
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt -t . --quiet
+          fi
+
+          zip -r ../../lambda.zip . \
+            -x "*.pyc" \
+            -x "*__pycache__*" \
+            -x "*.git*" \
+            -x "*.md"
+
+          cd ../..
+          aws s3 cp lambda.zip "s3://${S3_BUCKET}/${LAMBDA_S3_KEY}" --region "${AWS_REGION}"
+
+      - name: Upload Athena DML to S3
+        run: |
+          set -euo pipefail
+          aws s3 cp "athena/dml/insert_curated_messages.sql" \
+            "s3://${S3_BUCKET}/${SQL_S3_KEY}" \
+            --region "${AWS_REGION}"
+
+      - name: Upload Glue script to S3
+        run: |
+          set -euo pipefail
+          aws s3 cp "glue/python_shell/runner.py" \
+            "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}" \
+            --region "${AWS_REGION}"
+
   terraform:
+    needs: upload-artifacts
     uses: ./.github/workflows/terraform.yml
     with:
       environment: prod
@@ -27,50 +86,63 @@ jobs:
     env:
       AWS_REGION: sa-east-1
       ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
-      S3_BUCKET: axcloud-lab-sa-east-1-data
-      LAMBDA_NAME: axcloud-lab-lambda-ingest
-      GLUE_JOB_NAME: axcloud-lab-glue-shell-athena-exec
-      SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:584047610071:axcloud-lab-topic-ingest
-      SQL_S3_KEY: sql/dml/insert_curated_messages.sql
+      S3_BUCKET: prod-axcloud-lab-sa-east-1-data
+      LAMBDA_NAME: prod-axcloud-lab-lambda-ingest
+      GLUE_JOB_NAME: prod-axcloud-lab-glue-shell-athena-exec
+      SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:584047610071:prod-axcloud-lab-topic-ingest
       GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
+      LAMBDA_S3_KEY: lambda/lambda.zip
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v5
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
 
-      - name: Package Lambda
+      - name: Deploy Lambda
         run: |
-          cd src/lambda_ingest
-          zip -r ../../lambda.zip . -x "*__pycache__*" "*.pytest_cache*"
-          ls -lh ../../lambda.zip
+          set -euo pipefail
+          aws s3 cp "s3://${S3_BUCKET}/${LAMBDA_S3_KEY}" \
+            lambda.zip --region "${AWS_REGION}"
 
-      - name: Upload Athena DML to S3
-        run: |
-          aws s3 cp "athena/dml/insert_curated_messages.sql" "s3://${S3_BUCKET}/${SQL_S3_KEY}"
-
-      - name: Upload Glue script to S3
-        run: |
-          aws s3 cp "glue/python_shell/runner.py" "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}"
-
-      - name: Deploy Lambda code
-        run: |
           aws lambda update-function-code \
             --function-name "${LAMBDA_NAME}" \
-            --zip-file "fileb://lambda.zip"
+            --zip-file "fileb://lambda.zip" \
+            --region "${AWS_REGION}"
+
+          aws lambda wait function-updated \
+            --function-name "${LAMBDA_NAME}" \
+            --region "${AWS_REGION}"
 
       - name: Update Glue Job script location
         run: |
+          set -euo pipefail
+          GLUE_ROLE=$(aws glue get-job \
+            --job-name "${GLUE_JOB_NAME}" \
+            --region "${AWS_REGION}" \
+            --query 'Job.Role' \
+            --output text)
+
           aws glue update-job \
             --job-name "${GLUE_JOB_NAME}" \
-            --job-update "Command={Name=pythonshell,ScriptLocation=s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}}"
+            --region "${AWS_REGION}" \
+            --job-update "{
+              \"Role\": \"$GLUE_ROLE\",
+              \"Command\": {
+                \"Name\": \"pythonshell\",
+                \"ScriptLocation\": \"s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}\"
+              }
+            }"
 
       - name: Smoke test - publish SNS message
         run: |
+          set -euo pipefail
           aws sns publish \
             --topic-arn "${SNS_TOPIC_ARN}" \
-            --message "{\"hello\":\"world\",\"from\":\"github-actions-prod\"}"
+            --message "{\"hello\":\"world\",\"from\":\"github-actions-prod\"}" \
+            --region "${AWS_REGION}"
