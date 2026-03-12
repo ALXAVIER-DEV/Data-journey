@@ -21,7 +21,6 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    # ✅ FIX 5: Concurrency para evitar race condition entre runs paralelos
     concurrency:
       group: terraform-${{ inputs.environment }}
       cancel-in-progress: false
@@ -54,8 +53,6 @@ jobs:
           LOCK_TABLE="${{ inputs.aws-lock-athena-table }}"
           DDB_LOCK_ENABLED="false"
 
-          # ✅ FIX 1: Lógica de região corrigida
-          # us-east-1 é o ÚNICO que NÃO aceita LocationConstraint
           if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
             if [ "$REGION" = "us-east-1" ]; then
               aws s3api create-bucket --bucket "$BUCKET"
@@ -102,7 +99,7 @@ jobs:
           fi
 
           echo "TF_DDB_LOCK_ENABLED=$DDB_LOCK_ENABLED" >> "$GITHUB_ENV"
-          echo "TF_DDB_LOCK_TABLE=$LOCK_TABLE" >> "$GITHUB_ENV"
+          echo "TF_DDB_LOCK_TABLE=$LOCK_TABLE"         >> "$GITHUB_ENV"
 
       - name: Terraform Initialize
         run: |
@@ -127,7 +124,6 @@ jobs:
           cd infra/terraform
           terraform validate
 
-      # ✅ FIX 2 e 3: Import de recursos existentes ANTES do Plan
       - name: Import existing resources
         run: |
           cd infra/terraform
@@ -136,7 +132,6 @@ jobs:
           DATA_BUCKET="axcloud-lab-${{ inputs.aws-region }}-data"
 
           if ! terraform state show 'aws_s3_bucket.data_bucket[0]' > /dev/null 2>&1; then
-            # Verifica se o bucket existe na AWS antes de tentar importar
             if aws s3api head-bucket --bucket "$DATA_BUCKET" 2>/dev/null; then
               echo "Importando bucket existente: $DATA_BUCKET"
               terraform import 'aws_s3_bucket.data_bucket[0]' "$DATA_BUCKET"
@@ -145,6 +140,41 @@ jobs:
             fi
           else
             echo "aws_s3_bucket.data_bucket[0] já está no state. Pulando import."
+          fi
+
+      # ✅ FIX: Force-unlock de locks fantasmas antes do Plan
+      - name: Force unlock stale state lock
+        if: env.TF_DDB_LOCK_ENABLED == 'true'
+        run: |
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+
+          LOCK_KEY="${{ inputs.aws-statefile-bucket }}/env:/${{ inputs.environment }}/${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate"
+
+          LOCK_ITEM=$(aws dynamodb get-item \
+            --table-name "${{ inputs.aws-lock-athena-table }}" \
+            --region "${{ inputs.aws-region }}" \
+            --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}" \
+            --query 'Item' \
+            --output json 2>/dev/null || echo "null")
+
+          if [ "$LOCK_ITEM" != "null" ] && [ -n "$LOCK_ITEM" ]; then
+            LOCK_ID=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.ID // empty' 2>/dev/null || echo "")
+            CREATED=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.Created // empty' 2>/dev/null || echo "desconhecido")
+            echo "⚠️ Lock fantasma detectado. Criado em: $CREATED"
+
+            if [ -n "$LOCK_ID" ]; then
+              terraform force-unlock -force "$LOCK_ID"
+              echo "✅ Lock removido via terraform force-unlock: $LOCK_ID"
+            else
+              aws dynamodb delete-item \
+                --table-name "${{ inputs.aws-lock-athena-table }}" \
+                --region "${{ inputs.aws-region }}" \
+                --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}"
+              echo "✅ Lock removido diretamente no DynamoDB."
+            fi
+          else
+            echo "✅ Nenhum lock ativo encontrado. Prosseguindo."
           fi
 
       - name: Terraform Plan
@@ -164,7 +194,6 @@ jobs:
           terraform workspace select -or-create=true ${{ inputs.environment }}
           terraform apply -auto-approve -input=false "${{ inputs.environment }}.plan"
 
-      # ✅ FIX 6: Notificação de falha
       - name: Notify on failure
         if: failure()
         run: |
