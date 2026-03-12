@@ -240,3 +240,15 @@ resource "aws_glue_job" "athena_exec" {
 
   depends_on = [aws_iam_role_policy.glue_permissions]
 }
+
+# ============================================================
+# SNS Topic
+# ============================================================
+resource "aws_sns_topic" "ingest" {
+  name = var.sns_topic_name
+
+  tags = {
+    Name        = var.sns_topic_name
+    Environment = var.environment
+  }
+}

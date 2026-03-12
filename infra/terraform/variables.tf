@@ -85,3 +85,8 @@ variable "glue_script_s3_key" {
   description = "Caminho do script Glue no bucket S3"
   default     = "glue/python_shell/runner.py"
 }
+
+variable "sns_topic_name" {
+  type        = string
+  description = "Nome do tópico SNS de ingestão"
+}
