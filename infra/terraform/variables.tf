@@ -92,6 +92,6 @@ variable "glue_role_arn" {
 
 variable "glue_script_s3_key" {
   type        = string
-  description = "Caminho do script Glue no bucket S3 (ex: glue/python_shell/runner.py)"
+  description = "Caminho do script Glue no bucket S3"
   default     = "glue/python_shell/runner.py"
 }

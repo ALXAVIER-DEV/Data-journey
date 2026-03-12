@@ -9,3 +9,4 @@ lambda_memory_size   = 128
 lambda_s3_key        = "lambda/lambda.zip"
 sns_topic_arn        = "arn:aws:sns:sa-east-1:584047610071:axcloud-lab-topic-ingest"
 glue_job_name        = "axcloud-lab-glue-shell-athena-exec"
+glue_script_s3_key   = "glue/python_shell/runner.py"
