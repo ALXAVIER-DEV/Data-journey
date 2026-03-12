@@ -12,10 +12,6 @@ on:
     branches:
       - develop
 
-  permissions:
-    id-token: write
-    contents: read
-
 jobs:
 
   # ✅ JOB 1: Build e upload dos artefatos — roda ANTES do Terraform
