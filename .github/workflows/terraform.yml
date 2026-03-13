@@ -129,7 +129,13 @@ jobs:
           cd infra/terraform
           terraform workspace select -or-create=true ${{ inputs.environment }}
 
-          DATA_BUCKET="axcloud-lab-${{ inputs.aws-region }}-data"
+          TFVARS_FILE="./modules/envs/${{ inputs.environment }}/terraform.tfvars"
+          DATA_BUCKET="$(sed -n 's/^bucket_name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' "$TFVARS_FILE")"
+
+          if [ -z "$DATA_BUCKET" ]; then
+            echo "::error::Nao foi possivel ler bucket_name de $TFVARS_FILE"
+            exit 1
+          fi
 
           if ! terraform state show 'aws_s3_bucket.data_bucket[0]' > /dev/null 2>&1; then
             if aws s3api head-bucket --bucket "$DATA_BUCKET" 2>/dev/null; then

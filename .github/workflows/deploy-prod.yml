@@ -36,6 +36,25 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
 
+      - name: Ensure artifact bucket exists
+        run: |
+          set -euo pipefail
+
+          if aws s3api head-bucket --bucket "${S3_BUCKET}" 2>/dev/null; then
+            echo "Bucket ${S3_BUCKET} ja existe."
+          else
+            if [ "${AWS_REGION}" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "${S3_BUCKET}"
+            else
+              aws s3api create-bucket \
+                --bucket "${S3_BUCKET}" \
+                --create-bucket-configuration LocationConstraint="${AWS_REGION}"
+            fi
+
+            aws s3api wait bucket-exists --bucket "${S3_BUCKET}"
+            echo "Bucket ${S3_BUCKET} criado."
+          fi
+
       - name: Build and upload Lambda ZIP
         run: |
           set -euo pipefail

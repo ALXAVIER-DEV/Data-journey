@@ -118,7 +118,7 @@ resource "aws_lambda_function" "ingest" {
       ENVIRONMENT    = var.environment
       AWS_ACCOUNT_ID = data.aws_caller_identity.current.account_id
       S3_BUCKET      = var.bucket_name
-      SNS_TOPIC_ARN  = var.sns_topic_arn
+      SNS_TOPIC_ARN  = aws_sns_topic.ingest.arn
       GLUE_JOB_NAME  = var.glue_job_name
     }
   }

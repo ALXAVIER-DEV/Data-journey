@@ -68,12 +68,6 @@ variable "lambda_s3_key" {
   description = "Caminho do ZIP da Lambda no bucket S3 (ex: lambda/lambda.zip)"
 }
 
-variable "sns_topic_arn" {
-  type        = string
-  description = "ARN do topico SNS usado pela Lambda"
-  default     = ""
-}
-
 variable "glue_job_name" {
   type        = string
   description = "Nome do Glue Job acionado pela Lambda"

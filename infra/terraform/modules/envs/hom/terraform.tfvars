@@ -7,7 +7,6 @@ lambda_handler       = "main.handler"
 lambda_timeout       = 60
 lambda_memory_size   = 128
 lambda_s3_key        = "lambda/lambda.zip"
-sns_topic_arn        = "arn:aws:sns:sa-east-1:584047610071:hom-axcloud-lab-topic-ingest"
 glue_job_name        = "hom-axcloud-lab-glue-shell-athena-exec"
 glue_script_s3_key   = "glue/python_shell/runner.py"
 sns_topic_name       = "hom-axcloud-lab-topic-ingest"
