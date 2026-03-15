@@ -124,6 +124,57 @@ jobs:
           cd infra/terraform
           terraform validate
 
+      - name: Migrate renamed resources out of state
+        run: |
+          set -euo pipefail
+
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+
+          TFVARS_FILE="./modules/envs/${{ inputs.environment }}/terraform.tfvars"
+
+          read_tfvar() {
+            local key="$1"
+            sed -n "s/^${key}[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p" "$TFVARS_FILE"
+          }
+
+          state_attr() {
+            local address="$1"
+            local attribute="$2"
+
+            terraform state show "$address" 2>/dev/null | sed -n "s/^${attribute}[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p" | head -n 1
+          }
+
+          remove_if_mismatch() {
+            local address="$1"
+            local attribute="$2"
+            local expected="$3"
+
+            if terraform state show "$address" > /dev/null 2>&1; then
+              local current
+              current="$(state_attr "$address" "$attribute")"
+
+              if [ -n "$current" ] && [ "$current" != "$expected" ]; then
+                echo "State antigo detectado em $address: '$current' -> '$expected'"
+                terraform state rm "$address"
+              fi
+            fi
+          }
+
+          DESIRED_BUCKET="$(read_tfvar bucket_name)"
+          DESIRED_LAMBDA="$(read_tfvar lambda_function_name)"
+          DESIRED_GLUE="$(read_tfvar glue_job_name)"
+          DESIRED_SNS="$(read_tfvar sns_topic_name)"
+
+          remove_if_mismatch 'aws_s3_bucket.data_bucket[0]' 'bucket' "$DESIRED_BUCKET"
+          remove_if_mismatch 'aws_lambda_function.ingest' 'function_name' "$DESIRED_LAMBDA"
+          remove_if_mismatch 'aws_glue_job.athena_exec' 'name' "$DESIRED_GLUE"
+          remove_if_mismatch 'aws_sns_topic.ingest' 'name' "$DESIRED_SNS"
+          remove_if_mismatch 'aws_iam_role.lambda_exec' 'name' "${DESIRED_LAMBDA}-role"
+          remove_if_mismatch 'aws_iam_role.glue_exec' 'name' "${DESIRED_GLUE}-role"
+          remove_if_mismatch 'aws_iam_role_policy.lambda_permissions' 'name' "${DESIRED_LAMBDA}-policy"
+          remove_if_mismatch 'aws_iam_role_policy.glue_permissions' 'name' "${DESIRED_GLUE}-policy"
+
       - name: Import existing resources
         run: |
           cd infra/terraform
