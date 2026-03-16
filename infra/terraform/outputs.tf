@@ -73,3 +73,4 @@ output "sns_topic_name" {
   description = "Nome do tópico SNS"
   value       = aws_sns_topic.ingest.name
 }
+
