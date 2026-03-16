@@ -12,4 +12,9 @@ locals {
   bronze_prefix = "bronze"
   silver_prefix = "silver"
   gold_prefix   = "gold"
+
+  effective_bucket_name = var.create_data_bucket
+  ? aws_s3_bucket.data_bucket[0].bucket
+  : data.aws_s3_bucket.existing_data_bucket[0].bucket
 }
+
