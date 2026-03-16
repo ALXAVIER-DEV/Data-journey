@@ -1,12 +1,10 @@
-environment          = "dev"
-bucket_name          = "dev-axcloud-lab-sa-east-1-data"
-aws_region           = "sa-east-1"
-create_data_bucket   = true
-lambda_function_name = "dev-axcloud-lab-lambda-ingest"
-lambda_handler       = "main.handler"
-lambda_timeout       = 60
-lambda_memory_size   = 128
-lambda_s3_key        = "lambda/lambda.zip"
-glue_job_name        = "dev-axcloud-lab-glue-shell-athena-exec"
-glue_script_s3_key   = "glue/python_shell/runner.py"
-sns_topic_name       = "dev-axcloud-lab-topic-ingest"
+environment        = "dev"
+project_name       = "axcloud-lab"
+aws_region         = "sa-east-1"
+create_data_bucket = true
+
+lambda_handler     = "main.handler"
+lambda_timeout     = 60
+lambda_memory_size = 128
+lambda_s3_key      = "lambda/lambda.zip"
+glue_script_s3_key = "glue/python_shell/runner.py"

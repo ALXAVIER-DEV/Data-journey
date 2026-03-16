@@ -1,10 +1,10 @@
-variable "bucket_name" {
+variable "project_name" {
   type        = string
-  description = "Nome do bucket S3 de dados"
+  description = "Nome base do projeto"
 
   validation {
-    condition     = length(var.bucket_name) > 0
-    error_message = "O nome do bucket nao pode ser vazio."
+    condition     = length(trim(var.project_name, " ")) > 0
+    error_message = "O project_name nao pode ser vazio."
   }
 }
 
@@ -28,11 +28,6 @@ variable "aws_region" {
   type        = string
   description = "Regiao AWS para o deployment"
   default     = "sa-east-1"
-}
-
-variable "lambda_function_name" {
-  type        = string
-  description = "Nome da funcao Lambda"
 }
 
 variable "lambda_handler" {
@@ -65,22 +60,21 @@ variable "lambda_memory_size" {
 
 variable "lambda_s3_key" {
   type        = string
-  description = "Caminho do ZIP da Lambda no bucket S3 (ex: lambda/lambda.zip)"
-}
+  description = "Caminho do ZIP da Lambda no bucket S3"
 
-variable "glue_job_name" {
-  type        = string
-  description = "Nome do Glue Job acionado pela Lambda"
-  default     = ""
+  validation {
+    condition     = length(trim(var.lambda_s3_key, " ")) > 0
+    error_message = "O lambda_s3_key nao pode ser vazio."
+  }
 }
 
 variable "glue_script_s3_key" {
   type        = string
   description = "Caminho do script Glue no bucket S3"
   default     = "glue/python_shell/runner.py"
-}
 
-variable "sns_topic_name" {
-  type        = string
-  description = "Nome do tópico SNS de ingestão"
+  validation {
+    condition     = length(trim(var.glue_script_s3_key, " ")) > 0
+    error_message = "O glue_script_s3_key nao pode ser vazio."
+  }
 }

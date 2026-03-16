@@ -1,40 +1,49 @@
+data "aws_caller_identity" "current" {}
+
+# ============================================================
+# S3 Bucket de dados
+# ============================================================
 resource "aws_s3_bucket" "data_bucket" {
   count  = var.create_data_bucket ? 1 : 0
-  bucket = var.bucket_name
+  bucket = local.bucket_name
+
   lifecycle {
-  prevent_destroy = true
+    prevent_destroy = true
   }
-  
+
   tags = {
-    Name        = var.bucket_name
+    Name        = local.bucket_name
     Environment = var.environment
   }
-  
 }
 
 # ============================================================
 # IAM Role — Lambda
 # ============================================================
 resource "aws_iam_role" "lambda_exec" {
-  name = "${var.lambda_function_name}-role"
+  name = local.lambda_role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
   })
 
   tags = {
-    Name        = "${var.lambda_function_name}-role"
+    Name        = local.lambda_role_name
     Environment = var.environment
   }
 }
 
 resource "aws_iam_role_policy" "lambda_permissions" {
-  name = "${var.lambda_function_name}-policy"
+  name = "${local.lambda_function_name}-policy"
   role = aws_iam_role.lambda_exec.id
 
   policy = jsonencode({
@@ -50,8 +59,8 @@ resource "aws_iam_role_policy" "lambda_permissions" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::${var.bucket_name}",
-          "arn:aws:s3:::${var.bucket_name}/*"
+          "arn:aws:s3:::${local.bucket_name}",
+          "arn:aws:s3:::${local.bucket_name}/*"
         ]
       },
       {
@@ -68,9 +77,12 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/*"
       },
       {
-        Sid      = "SNSAccess"
-        Effect   = "Allow"
-        Action   = ["sns:Publish", "sns:Subscribe"]
+        Sid    = "SNSAccess"
+        Effect = "Allow"
+        Action = [
+          "sns:Publish",
+          "sns:Subscribe"
+        ]
         Resource = "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
@@ -102,57 +114,66 @@ resource "aws_iam_role_policy" "lambda_permissions" {
 # Lambda Function
 # ============================================================
 resource "aws_lambda_function" "ingest" {
-  function_name = var.lambda_function_name
+  function_name = local.lambda_function_name
   role          = aws_iam_role.lambda_exec.arn
   runtime       = "python3.12"
   handler       = var.lambda_handler
   timeout       = var.lambda_timeout
   memory_size   = var.lambda_memory_size
 
-  s3_bucket = var.bucket_name
+  s3_bucket = local.bucket_name
   s3_key    = var.lambda_s3_key
 
   environment {
     variables = {
       ENVIRONMENT    = var.environment
       AWS_ACCOUNT_ID = data.aws_caller_identity.current.account_id
-      S3_BUCKET      = var.bucket_name
+      S3_BUCKET      = local.bucket_name
       SNS_TOPIC_ARN  = aws_sns_topic.ingest.arn
-      GLUE_JOB_NAME  = var.glue_job_name
+      GLUE_JOB_NAME  = local.glue_job_name
+      BRONZE_PREFIX  = local.bronze_prefix
+      SILVER_PREFIX  = local.silver_prefix
+      GOLD_PREFIX    = local.gold_prefix
     }
   }
 
   tags = {
-    Name        = var.lambda_function_name
+    Name        = local.lambda_function_name
     Environment = var.environment
   }
 
-  depends_on = [aws_iam_role_policy.lambda_permissions]
+  depends_on = [
+    aws_iam_role_policy.lambda_permissions
+  ]
 }
 
 # ============================================================
 # IAM Role — Glue
 # ============================================================
 resource "aws_iam_role" "glue_exec" {
-  name = "${var.glue_job_name}-role"
+  name = local.glue_role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "glue.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "glue.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
   })
 
   tags = {
-    Name        = "${var.glue_job_name}-role"
+    Name        = local.glue_role_name
     Environment = var.environment
   }
 }
 
 resource "aws_iam_role_policy" "glue_permissions" {
-  name = "${var.glue_job_name}-policy"
+  name = "${local.glue_job_name}-policy"
   role = aws_iam_role.glue_exec.id
 
   policy = jsonencode({
@@ -168,8 +189,8 @@ resource "aws_iam_role_policy" "glue_permissions" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::${var.bucket_name}",
-          "arn:aws:s3:::${var.bucket_name}/*"
+          "arn:aws:s3:::${local.bucket_name}",
+          "arn:aws:s3:::${local.bucket_name}/*"
         ]
       },
       {
@@ -214,40 +235,42 @@ resource "aws_iam_role_policy" "glue_permissions" {
 # Glue Job
 # ============================================================
 resource "aws_glue_job" "athena_exec" {
-  name         = var.glue_job_name
+  name         = local.glue_job_name
   role_arn     = aws_iam_role.glue_exec.arn
   glue_version = "3.0"
 
   command {
     name            = "pythonshell"
     python_version  = "3.9"
-    script_location = "s3://${var.bucket_name}/${var.glue_script_s3_key}"
+    script_location = "s3://${local.bucket_name}/${var.glue_script_s3_key}"
   }
 
   default_arguments = {
     "--job-language"        = "python"
-    "--TempDir"             = "s3://${var.bucket_name}/tmp/glue/"
+    "--TempDir"             = "s3://${local.bucket_name}/tmp/glue/"
     "--enable-job-insights" = "true"
   }
 
   max_capacity = 0.0625
 
   tags = {
-    Name        = var.glue_job_name
+    Name        = local.glue_job_name
     Environment = var.environment
   }
 
-  depends_on = [aws_iam_role_policy.glue_permissions]
+  depends_on = [
+    aws_iam_role_policy.glue_permissions
+  ]
 }
 
 # ============================================================
 # SNS Topic
 # ============================================================
 resource "aws_sns_topic" "ingest" {
-  name = var.sns_topic_name
+  name = local.sns_topic_name
 
   tags = {
-    Name        = var.sns_topic_name
+    Name        = local.sns_topic_name
     Environment = var.environment
   }
 }
