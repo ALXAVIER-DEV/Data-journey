@@ -1,4 +1,5 @@
 name: "Terraform Workflow"
+
 on:
   workflow_call:
     inputs:
@@ -24,6 +25,7 @@ jobs:
     concurrency:
       group: terraform-${{ inputs.environment }}
       cancel-in-progress: false
+
     defaults:
       run:
         shell: bash
@@ -81,7 +83,7 @@ jobs:
               else
                 CREATE_ERR="$(cat "$CREATE_ERR_FILE")"
                 if echo "$CREATE_ERR" | grep -q "AccessDeniedException"; then
-                  echo "Warning: sem permissão para criar tabela DynamoDB. Continuando sem state locking."
+                  echo "Warning: sem permissao para criar tabela DynamoDB. Continuando sem state locking."
                   DDB_LOCK_ENABLED="false"
                 else
                   echo "$CREATE_ERR"
@@ -90,7 +92,7 @@ jobs:
               fi
               rm -f "$CREATE_ERR_FILE"
             elif echo "$DDB_ERR" | grep -q "AccessDeniedException"; then
-              echo "Warning: sem permissão para descrever tabela DynamoDB. Continuando sem state locking."
+              echo "Warning: sem permissao para descrever tabela DynamoDB. Continuando sem state locking."
               DDB_LOCK_ENABLED="false"
             else
               echo "$DDB_ERR"
@@ -99,7 +101,7 @@ jobs:
           fi
 
           echo "TF_DDB_LOCK_ENABLED=$DDB_LOCK_ENABLED" >> "$GITHUB_ENV"
-          echo "TF_DDB_LOCK_TABLE=$LOCK_TABLE"         >> "$GITHUB_ENV"
+          echo "TF_DDB_LOCK_TABLE=$LOCK_TABLE" >> "$GITHUB_ENV"
 
       - name: Terraform Initialize
         run: |
@@ -141,7 +143,6 @@ jobs:
           state_attr() {
             local address="$1"
             local attribute="$2"
-
             terraform state show "$address" 2>/dev/null | sed -n "s/^${attribute}[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p" | head -n 1
           }
 
@@ -161,10 +162,21 @@ jobs:
             fi
           }
 
-          DESIRED_BUCKET="$(read_tfvar bucket_name)"
-          DESIRED_LAMBDA="$(read_tfvar lambda_function_name)"
-          DESIRED_GLUE="$(read_tfvar glue_job_name)"
-          DESIRED_SNS="$(read_tfvar sns_topic_name)"
+          ENVIRONMENT="$(read_tfvar environment)"
+          PROJECT_NAME="$(read_tfvar project_name)"
+          AWS_REGION_TFVARS="$(read_tfvar aws_region)"
+
+          if [ -z "$ENVIRONMENT" ] || [ -z "$PROJECT_NAME" ] || [ -z "$AWS_REGION_TFVARS" ]; then
+            echo "::error::Nao foi possivel ler environment, project_name ou aws_region de $TFVARS_FILE"
+            exit 1
+          fi
+
+          PREFIX="${ENVIRONMENT}-${PROJECT_NAME}"
+
+          DESIRED_BUCKET="${PREFIX}-${AWS_REGION_TFVARS}-data"
+          DESIRED_LAMBDA="${PREFIX}-lambda-ingest"
+          DESIRED_GLUE="${PREFIX}-glue-shell-athena-exec"
+          DESIRED_SNS="${PREFIX}-topic-ingest"
 
           remove_if_mismatch 'aws_s3_bucket.data_bucket[0]' 'bucket' "$DESIRED_BUCKET"
           remove_if_mismatch 'aws_lambda_function.ingest' 'function_name' "$DESIRED_LAMBDA"
@@ -177,36 +189,55 @@ jobs:
 
       - name: Import existing resources
         run: |
+          set -euo pipefail
+
           cd infra/terraform
           terraform workspace select -or-create=true ${{ inputs.environment }}
 
           TFVARS_FILE="./modules/envs/${{ inputs.environment }}/terraform.tfvars"
-          DATA_BUCKET="$(sed -n 's/^bucket_name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' "$TFVARS_FILE")"
 
-          if [ -z "$DATA_BUCKET" ]; then
-            echo "::error::Nao foi possivel ler bucket_name de $TFVARS_FILE"
+          read_tfvar() {
+            local key="$1"
+            sed -n "s/^${key}[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p" "$TFVARS_FILE"
+          }
+
+          ENVIRONMENT="$(read_tfvar environment)"
+          PROJECT_NAME="$(read_tfvar project_name)"
+          AWS_REGION_TFVARS="$(read_tfvar aws_region)"
+          CREATE_DATA_BUCKET="$(sed -n 's/^create_data_bucket[[:space:]]*=[[:space:]]*\(.*\)/\1/p' "$TFVARS_FILE" | tr -d '[:space:]')"
+
+          if [ -z "$ENVIRONMENT" ] || [ -z "$PROJECT_NAME" ] || [ -z "$AWS_REGION_TFVARS" ]; then
+            echo "::error::Nao foi possivel ler environment, project_name ou aws_region de $TFVARS_FILE"
             exit 1
           fi
+
+          if [ "$CREATE_DATA_BUCKET" != "true" ]; then
+            echo "create_data_bucket=$CREATE_DATA_BUCKET. Pulando import do bucket."
+            exit 0
+          fi
+
+          DATA_BUCKET="${ENVIRONMENT}-${PROJECT_NAME}-${AWS_REGION_TFVARS}-data"
 
           if ! terraform state show 'aws_s3_bucket.data_bucket[0]' > /dev/null 2>&1; then
             if aws s3api head-bucket --bucket "$DATA_BUCKET" 2>/dev/null; then
               echo "Importando bucket existente: $DATA_BUCKET"
               terraform import 'aws_s3_bucket.data_bucket[0]' "$DATA_BUCKET"
             else
-              echo "Bucket $DATA_BUCKET não existe na AWS. Será criado pelo Terraform."
+              echo "Bucket $DATA_BUCKET nao existe na AWS. Sera criado pelo Terraform."
             fi
           else
-            echo "aws_s3_bucket.data_bucket[0] já está no state. Pulando import."
+            echo "aws_s3_bucket.data_bucket[0] ja esta no state. Pulando import."
           fi
 
-      # ✅ FIX: Force-unlock de locks fantasmas antes do Plan
       - name: Force unlock stale state lock
         if: env.TF_DDB_LOCK_ENABLED == 'true'
         run: |
+          set -euo pipefail
+
           cd infra/terraform
           terraform workspace select -or-create=true ${{ inputs.environment }}
 
-          LOCK_KEY="${{ inputs.aws-statefile-bucket }}/env:/${{ inputs.environment }}/${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate"
+          LOCK_KEY="${{ inputs.aws-statefile-bucket }}/${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate"
 
           LOCK_ITEM=$(aws dynamodb get-item \
             --table-name "${{ inputs.aws-lock-athena-table }}" \
@@ -218,20 +249,20 @@ jobs:
           if [ "$LOCK_ITEM" != "null" ] && [ -n "$LOCK_ITEM" ]; then
             LOCK_ID=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.ID // empty' 2>/dev/null || echo "")
             CREATED=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.Created // empty' 2>/dev/null || echo "desconhecido")
-            echo "⚠️ Lock fantasma detectado. Criado em: $CREATED"
+            echo "Lock detectado. Criado em: $CREATED"
 
             if [ -n "$LOCK_ID" ]; then
               terraform force-unlock -force "$LOCK_ID"
-              echo "✅ Lock removido via terraform force-unlock: $LOCK_ID"
+              echo "Lock removido via terraform force-unlock: $LOCK_ID"
             else
               aws dynamodb delete-item \
                 --table-name "${{ inputs.aws-lock-athena-table }}" \
                 --region "${{ inputs.aws-region }}" \
                 --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}"
-              echo "✅ Lock removido diretamente no DynamoDB."
+              echo "Lock removido diretamente no DynamoDB."
             fi
           else
-            echo "✅ Nenhum lock ativo encontrado. Prosseguindo."
+            echo "Nenhum lock ativo encontrado. Prosseguindo."
           fi
 
       - name: Terraform Plan
@@ -256,3 +287,5 @@ jobs:
         run: |
           echo "::error::Terraform falhou no ambiente ${{ inputs.environment }}"
           echo "::error::Verifique os logs acima para detalhes do erro"
+
+          
