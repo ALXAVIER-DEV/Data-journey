@@ -126,7 +126,7 @@ jobs:
           cd infra/terraform
           terraform validate
 
-      - name: Migrate renamed resources out of state
+            - name: Migrate renamed resources out of state
         run: |
           set -euo pipefail
 
@@ -143,7 +143,10 @@ jobs:
           state_attr() {
             local address="$1"
             local attribute="$2"
-            terraform state show "$address" 2>/dev/null | sed -n "s/^${attribute}[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p" | head -n 1
+
+            terraform state show "$address" 2>/dev/null \
+              | sed -n "s/^[[:space:]]*${attribute}[[:space:]]*=[[:space:]]*\"\\(.*\\)\"/\\1/p" \
+              | head -n 1
           }
 
           remove_if_mismatch() {
@@ -155,10 +158,19 @@ jobs:
               local current
               current="$(state_attr "$address" "$attribute")"
 
+              echo "Verificando $address"
+              echo "  atributo esperado: $attribute"
+              echo "  valor atual no state: ${current:-<vazio>}"
+              echo "  valor esperado: ${expected:-<vazio>}"
+
               if [ -n "$current" ] && [ "$current" != "$expected" ]; then
                 echo "State antigo detectado em $address: '$current' -> '$expected'"
                 terraform state rm "$address"
+              else
+                echo "Sem divergencia em $address"
               fi
+            else
+              echo "$address nao existe no state. Nada a remover."
             fi
           }
 
@@ -178,7 +190,29 @@ jobs:
           DESIRED_GLUE="${PREFIX}-glue-shell-athena-exec"
           DESIRED_SNS="${PREFIX}-topic-ingest"
 
-          remove_if_mismatch 'aws_s3_bucket.data_bucket[0]' 'bucket' "$DESIRED_BUCKET"
+          echo "Nomes desejados calculados:"
+          echo "  bucket: $DESIRED_BUCKET"
+          echo "  lambda: $DESIRED_LAMBDA"
+          echo "  glue:   $DESIRED_GLUE"
+          echo "  sns:    $DESIRED_SNS"
+
+          # Tratamento explicito do bucket, por ser recurso critico com prevent_destroy
+          if terraform state show 'aws_s3_bucket.data_bucket[0]' > /dev/null 2>&1; then
+            CURRENT_BUCKET="$(state_attr 'aws_s3_bucket.data_bucket[0]' 'bucket')"
+
+            echo "Bucket no state: ${CURRENT_BUCKET:-<vazio>}"
+            echo "Bucket esperado: $DESIRED_BUCKET"
+
+            if [ -n "$CURRENT_BUCKET" ] && [ "$CURRENT_BUCKET" != "$DESIRED_BUCKET" ]; then
+              echo "Removendo bucket legado do state: $CURRENT_BUCKET"
+              terraform state rm 'aws_s3_bucket.data_bucket[0]'
+            else
+              echo "Bucket no state ja esta aderente ao naming atual."
+            fi
+          else
+            echo "aws_s3_bucket.data_bucket[0] nao existe no state."
+          fi
+
           remove_if_mismatch 'aws_lambda_function.ingest' 'function_name' "$DESIRED_LAMBDA"
           remove_if_mismatch 'aws_glue_job.athena_exec' 'name' "$DESIRED_GLUE"
           remove_if_mismatch 'aws_sns_topic.ingest' 'name' "$DESIRED_SNS"
