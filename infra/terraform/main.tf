@@ -1,19 +1,19 @@
 # ============================================================
 # S3 Bucket de dados
 # ============================================================
-resource "aws_s3_bucket" "data_bucket" {
-  count  = var.create_data_bucket ? 1 : 0
-  bucket = local.bucket_name
+# resource "aws_s3_bucket" "data_bucket" {
+#   count  = var.create_data_bucket ? 1 : 0
+#   bucket = local.bucket_name
 
-  lifecycle {
-    prevent_destroy = true
-  }
+#   lifecycle {
+#     prevent_destroy = true
+#   }
 
-  tags = {
-    Name        = local.bucket_name
-    Environment = var.environment
-  }
-}
+#   tags = {
+#     Name        = local.bucket_name
+#     Environment = var.environment
+#   }
+# }
 
 # ============================================================
 # IAM Role — Lambda
