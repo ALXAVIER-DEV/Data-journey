@@ -1,5 +1,6 @@
-﻿import os
+import os
 import time
+import traceback
 
 import boto3
 from awsglue.utils import getResolvedOptions
@@ -22,6 +23,11 @@ def load_sql_from_s3(s3_uri: str) -> str:
         raise ValueError("SQL_S3_URI deve estar no formato s3://bucket/chave.sql")
 
     bucket_and_key = s3_uri[len("s3://") :]
+    if "/" not in bucket_and_key:
+        raise ValueError(
+            "SQL_S3_URI deve incluir bucket e chave, por exemplo s3://bucket/script.sql"
+        )
+
     bucket, key = bucket_and_key.split("/", 1)
     s3 = boto3.client("s3")
     response = s3.get_object(Bucket=bucket, Key=key)
@@ -69,4 +75,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        print(f"Glue runner failed: {exc}")
+        print(traceback.format_exc())
+        raise SystemExit(1) from exc
