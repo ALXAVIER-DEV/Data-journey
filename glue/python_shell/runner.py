@@ -1,7 +1,20 @@
-import os
+﻿import os
 import time
 
 import boto3
+from awsglue.utils import getResolvedOptions
+
+
+def get_args() -> dict:
+    return getResolvedOptions(
+        os.sys.argv,
+        [
+            "AWS_REGION",
+            "ATHENA_DATABASE",
+            "ATHENA_OUTPUT_LOCATION",
+            "SQL_S3_URI",
+        ],
+    )
 
 
 def load_sql_from_s3(s3_uri: str) -> str:
@@ -37,15 +50,11 @@ def wait_for_athena(query_execution_id: str, region: str, sleep_seconds: int = 3
 
 
 def main() -> None:
-    region = os.getenv("AWS_REGION", "sa-east-1")
-    database = os.getenv("ATHENA_DATABASE", "default")
-    output_location = os.getenv("ATHENA_OUTPUT_LOCATION", "")
-    sql_s3_uri = os.getenv("SQL_S3_URI", "")
-
-    if not output_location:
-        raise ValueError("ATHENA_OUTPUT_LOCATION is required")
-    if not sql_s3_uri:
-        raise ValueError("SQL_S3_URI is required")
+    args = get_args()
+    region = args["AWS_REGION"]
+    database = args["ATHENA_DATABASE"]
+    output_location = args["ATHENA_OUTPUT_LOCATION"]
+    sql_s3_uri = args["SQL_S3_URI"]
 
     sql = load_sql_from_s3(sql_s3_uri)
     query_execution_id = run_athena_query(sql, database, output_location, region)

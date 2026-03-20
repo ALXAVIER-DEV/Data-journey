@@ -68,6 +68,7 @@
         "sns:DeleteTopic",
         "sns:GetTopicAttributes",
         "sns:ListTagsForResource",
+        "sns:Publish",
         "sns:SetTopicAttributes",
         "sns:TagResource",
         "sns:UntagResource"
@@ -88,3 +89,6 @@
     }
   ]
 }
+
+
+

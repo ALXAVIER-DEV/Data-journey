@@ -244,9 +244,13 @@ resource "aws_glue_job" "athena_exec" {
   }
 
   default_arguments = {
-    "--job-language"        = "python"
-    "--TempDir"             = "s3://${local.bucket_name}/tmp/glue/"
-    "--enable-job-insights" = "true"
+    "--job-language"           = "python"
+    "--TempDir"                = "s3://${local.bucket_name}/tmp/glue/"
+    "--enable-job-insights"    = "true"
+    "--AWS_REGION"             = var.aws_region
+    "--ATHENA_DATABASE"        = "default"
+    "--ATHENA_OUTPUT_LOCATION" = "s3://${local.bucket_name}/tmp/athena-results/"
+    "--SQL_S3_URI"             = "s3://${local.bucket_name}/sql/dml/insert_curated_messages.sql"
   }
 
   max_capacity = 0.0625
