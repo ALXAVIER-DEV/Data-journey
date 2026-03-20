@@ -1,0 +1,90 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageTerraformIamRolesForDev",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::584047610071:role/dev-axcloud-lab-lambda-ingest-role",
+        "arn:aws:iam::584047610071:role/dev-axcloud-lab-glue-shell-athena-exec-role"
+      ]
+    },
+    {
+      "Sid": "ManageTerraformInlinePoliciesForDevRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:PutRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::584047610071:role/dev-axcloud-lab-lambda-ingest-role",
+        "arn:aws:iam::584047610071:role/dev-axcloud-lab-glue-shell-athena-exec-role"
+      ]
+    },
+    {
+      "Sid": "ManageLambdaFunctionForDev",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration"
+      ],
+      "Resource": "arn:aws:lambda:sa-east-1:584047610071:function:dev-axcloud-lab-lambda-ingest"
+    },
+    {
+      "Sid": "ManageGlueJobForDev",
+      "Effect": "Allow",
+      "Action": [
+        "glue:CreateJob",
+        "glue:DeleteJob",
+        "glue:GetJob",
+        "glue:TagResource",
+        "glue:UntagResource",
+        "glue:UpdateJob"
+      ],
+      "Resource": "arn:aws:glue:sa-east-1:584047610071:job/dev-axcloud-lab-glue-shell-athena-exec"
+    },
+    {
+      "Sid": "ManageSnsTopicForDev",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:ListTagsForResource",
+        "sns:SetTopicAttributes",
+        "sns:TagResource",
+        "sns:UntagResource"
+      ],
+      "Resource": "arn:aws:sns:sa-east-1:584047610071:dev-axcloud-lab-topic-ingest"
+    },
+    {
+      "Sid": "ManageDataBucketForDev",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketTagging",
+        "s3:ListBucket",
+        "s3:PutBucketTagging"
+      ],
+      "Resource": "arn:aws:s3:::dev-axcloud-lab-sa-east-1-data"
+    }
+  ]
+}

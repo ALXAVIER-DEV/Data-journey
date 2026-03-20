@@ -1,0 +1,90 @@
+﻿{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageTerraformIamRolesForHom",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::584047610071:role/hom-axcloud-lab-lambda-ingest-role",
+        "arn:aws:iam::584047610071:role/hom-axcloud-lab-glue-shell-athena-exec-role"
+      ]
+    },
+    {
+      "Sid": "ManageTerraformInlinePoliciesForHomRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:PutRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::584047610071:role/hom-axcloud-lab-lambda-ingest-role",
+        "arn:aws:iam::584047610071:role/hom-axcloud-lab-glue-shell-athena-exec-role"
+      ]
+    },
+    {
+      "Sid": "ManageLambdaFunctionForHom",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration"
+      ],
+      "Resource": "arn:aws:lambda:sa-east-1:584047610071:function:hom-axcloud-lab-lambda-ingest"
+    },
+    {
+      "Sid": "ManageGlueJobForHom",
+      "Effect": "Allow",
+      "Action": [
+        "glue:CreateJob",
+        "glue:DeleteJob",
+        "glue:GetJob",
+        "glue:TagResource",
+        "glue:UntagResource",
+        "glue:UpdateJob"
+      ],
+      "Resource": "arn:aws:glue:sa-east-1:584047610071:job/hom-axcloud-lab-glue-shell-athena-exec"
+    },
+    {
+      "Sid": "ManageSnsTopicForHom",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:ListTagsForResource",
+        "sns:SetTopicAttributes",
+        "sns:TagResource",
+        "sns:UntagResource"
+      ],
+      "Resource": "arn:aws:sns:sa-east-1:584047610071:hom-axcloud-lab-topic-ingest"
+    },
+    {
+      "Sid": "ManageDataBucketForHom",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:GetBucketLocation",
+        "s3:GetBucketTagging",
+        "s3:ListBucket",
+        "s3:PutBucketTagging"
+      ],
+      "Resource": "arn:aws:s3:::hom-axcloud-lab-sa-east-1-data"
+    }
+  ]
+}
