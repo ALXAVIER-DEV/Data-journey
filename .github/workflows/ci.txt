@@ -23,6 +23,10 @@ jobs:
           test -f athena/dml/insert_curated_messages.sql
           echo "SQL OK"
 
+      - name: Validate Athena SQL content
+        run: |
+          bash scripts/validate-athena-sql.sh athena/dml/insert_curated_messages.sql
+
       - name: Validate Glue script exists
         run: |
           test -f glue/python_shell/runner.py

@@ -76,6 +76,7 @@ jobs:
       - name: Upload Athena DML to S3
         run: |
           set -euo pipefail
+          bash scripts/validate-athena-sql.sh athena/dml/insert_curated_messages.sql
           aws s3 cp "athena/dml/insert_curated_messages.sql" \
             "s3://${S3_BUCKET}/${SQL_S3_KEY}" \
             --region "${AWS_REGION}"
