@@ -126,6 +126,42 @@ jobs:
           cd infra/terraform
           terraform validate
 
+      - name: Force unlock stale state lock
+        if: env.TF_DDB_LOCK_ENABLED == 'true'
+        run: |
+          set -euo pipefail
+
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+
+          LOCK_KEY="${{ inputs.aws-statefile-bucket }}/env:/${{ inputs.environment }}/${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate"
+
+          LOCK_ITEM=$(aws dynamodb get-item \
+            --table-name "${{ inputs.aws-lock-athena-table }}" \
+            --region "${{ inputs.aws-region }}" \
+            --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}" \
+            --query 'Item' \
+            --output json 2>/dev/null || echo "null")
+
+          if [ "$LOCK_ITEM" != "null" ] && [ -n "$LOCK_ITEM" ]; then
+            LOCK_ID=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.ID // empty' 2>/dev/null || echo "")
+            CREATED=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.Created // empty' 2>/dev/null || echo "desconhecido")
+            echo "Lock detectado. Criado em: $CREATED"
+
+            if [ -n "$LOCK_ID" ]; then
+              terraform force-unlock -force "$LOCK_ID"
+              echo "Lock removido via terraform force-unlock: $LOCK_ID"
+            else
+              aws dynamodb delete-item \
+                --table-name "${{ inputs.aws-lock-athena-table }}" \
+                --region "${{ inputs.aws-region }}" \
+                --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}"
+              echo "Lock removido diretamente no DynamoDB."
+            fi
+          else
+            echo "Nenhum lock ativo encontrado. Prosseguindo."
+          fi
+
       - name: Migrate renamed resources out of state
         run: |
           set -euo pipefail
@@ -261,42 +297,6 @@ jobs:
             fi
           else
             echo "aws_s3_bucket.data_bucket[0] ja esta no state. Pulando import."
-          fi
-
-      - name: Force unlock stale state lock
-        if: env.TF_DDB_LOCK_ENABLED == 'true'
-        run: |
-          set -euo pipefail
-
-          cd infra/terraform
-          terraform workspace select -or-create=true ${{ inputs.environment }}
-
-          LOCK_KEY="${{ inputs.aws-statefile-bucket }}/${{ github.repository }}/${{ inputs.environment }}/terraform.tfstate"
-
-          LOCK_ITEM=$(aws dynamodb get-item \
-            --table-name "${{ inputs.aws-lock-athena-table }}" \
-            --region "${{ inputs.aws-region }}" \
-            --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}" \
-            --query 'Item' \
-            --output json 2>/dev/null || echo "null")
-
-          if [ "$LOCK_ITEM" != "null" ] && [ -n "$LOCK_ITEM" ]; then
-            LOCK_ID=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.ID // empty' 2>/dev/null || echo "")
-            CREATED=$(echo "$LOCK_ITEM" | jq -r '.Info.S // empty' | jq -r '.Created // empty' 2>/dev/null || echo "desconhecido")
-            echo "Lock detectado. Criado em: $CREATED"
-
-            if [ -n "$LOCK_ID" ]; then
-              terraform force-unlock -force "$LOCK_ID"
-              echo "Lock removido via terraform force-unlock: $LOCK_ID"
-            else
-              aws dynamodb delete-item \
-                --table-name "${{ inputs.aws-lock-athena-table }}" \
-                --region "${{ inputs.aws-region }}" \
-                --key "{\"LockID\": {\"S\": \"$LOCK_KEY\"}}"
-              echo "Lock removido diretamente no DynamoDB."
-            fi
-          else
-            echo "Nenhum lock ativo encontrado. Prosseguindo."
           fi
 
       - name: Terraform Plan
