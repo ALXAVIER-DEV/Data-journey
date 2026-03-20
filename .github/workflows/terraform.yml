@@ -126,7 +126,7 @@ jobs:
           cd infra/terraform
           terraform validate
 
-            - name: Migrate renamed resources out of state
+      - name: Migrate renamed resources out of state
         run: |
           set -euo pipefail
 
