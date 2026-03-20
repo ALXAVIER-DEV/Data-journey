@@ -291,7 +291,11 @@ jobs:
           if ! terraform state show 'aws_s3_bucket.data_bucket[0]' > /dev/null 2>&1; then
             if aws s3api head-bucket --bucket "$DATA_BUCKET" 2>/dev/null; then
               echo "Importando bucket existente: $DATA_BUCKET"
-              terraform import 'aws_s3_bucket.data_bucket[0]' "$DATA_BUCKET"
+              terraform import \
+                -input=false \
+                -var-file="$TFVARS_FILE" \
+                'aws_s3_bucket.data_bucket[0]' \
+                "$DATA_BUCKET"
             else
               echo "Bucket $DATA_BUCKET nao existe na AWS. Sera criado pelo Terraform."
             fi
