@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import traceback
 
@@ -44,14 +45,19 @@ def run_athena_query(query: str, database: str, output_location: str, region: st
     return response["QueryExecutionId"]
 
 
-def wait_for_athena(query_execution_id: str, region: str, sleep_seconds: int = 3) -> str:
+def wait_for_athena(
+    query_execution_id: str, region: str, sleep_seconds: int = 3
+) -> tuple[str, str | None]:
     athena = boto3.client("athena", region_name=region)
     while True:
-        status = athena.get_query_execution(QueryExecutionId=query_execution_id)[
+        query_execution = athena.get_query_execution(QueryExecutionId=query_execution_id)[
             "QueryExecution"
-        ]["Status"]["State"]
+        ]
+        query_status = query_execution["Status"]
+        status = query_status["State"]
+        reason = query_status.get("StateChangeReason")
         if status in {"SUCCEEDED", "FAILED", "CANCELLED"}:
-            return status
+            return status, reason
         time.sleep(sleep_seconds)
 
 
@@ -64,12 +70,16 @@ def main() -> None:
 
     sql = load_sql_from_s3(sql_s3_uri)
     query_execution_id = run_athena_query(sql, database, output_location, region)
-    final_status = wait_for_athena(query_execution_id, region)
+    final_status, failure_reason = wait_for_athena(query_execution_id, region)
 
     if final_status != "SUCCEEDED":
-        raise RuntimeError(
-            f"Athena query finished with status {final_status}. QueryExecutionId={query_execution_id}"
+        error_message = (
+            f"Athena query finished with status {final_status}. "
+            f"QueryExecutionId={query_execution_id}"
         )
+        if failure_reason:
+            error_message = f"{error_message}. Reason: {failure_reason}"
+        raise RuntimeError(error_message)
 
     print(f"Athena query executed successfully. QueryExecutionId={query_execution_id}")
 
@@ -79,5 +89,5 @@ if __name__ == "__main__":
         main()
     except Exception as exc:
         print(f"Glue runner failed: {exc}")
-        print(traceback.format_exc())
-        raise SystemExit(1) from exc
+        print(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+        sys.exit(1)
