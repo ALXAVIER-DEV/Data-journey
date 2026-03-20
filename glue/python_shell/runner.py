@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 import traceback
 
@@ -90,4 +89,4 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"Glue runner failed: {exc}")
         print(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
-        sys.exit(1)
+        raise
