@@ -23,7 +23,7 @@ jobs:
       ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
       S3_BUCKET: dev-axcloud-lab-sa-east-1-data
       SQL_S3_KEY: sql/dml/insert_curated_messages.sql
-      GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
+      GLUE_SCRIPT_S3_KEY: glue/python_shell/runner-v2026-03-21-2.py
       LAMBDA_S3_KEY: lambda/lambda.zip
 
     steps:
@@ -123,7 +123,7 @@ jobs:
       LAMBDA_NAME: dev-axcloud-lab-lambda-ingest
       GLUE_JOB_NAME: dev-axcloud-lab-glue-shell-athena-exec
       SNS_TOPIC_ARN: arn:aws:sns:sa-east-1:584047610071:dev-axcloud-lab-topic-ingest
-      GLUE_SCRIPT_S3_KEY: glue/python_shell/runner.py
+      GLUE_SCRIPT_S3_KEY: glue/python_shell/runner-v2026-03-21-2.py
       LAMBDA_S3_KEY: lambda/lambda.zip
 
     steps:
@@ -205,3 +205,4 @@ jobs:
         if: failure()
         run: |
           echo "::error::Deploy DEV falhou. Verifique os logs acima."
+

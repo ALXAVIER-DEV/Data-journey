@@ -7,4 +7,4 @@ lambda_handler     = "main.handler"
 lambda_timeout     = 60
 lambda_memory_size = 128
 lambda_s3_key      = "lambda/lambda.zip"
-glue_script_s3_key = "glue/python_shell/runner.py"
+glue_script_s3_key = "glue/python_shell/runner-v2026-03-21-2.py"
