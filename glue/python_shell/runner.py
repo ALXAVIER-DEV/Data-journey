@@ -1,9 +1,10 @@
 import os
 import time
-import traceback
 
 import boto3
 from awsglue.utils import getResolvedOptions
+
+RUNNER_VERSION = "2026-03-21.2"
 
 
 def get_args() -> dict:
@@ -67,8 +68,14 @@ def main() -> None:
     output_location = args["ATHENA_OUTPUT_LOCATION"]
     sql_s3_uri = args["SQL_S3_URI"]
 
+    print(
+        f"Glue Athena runner version={RUNNER_VERSION} region={region} "
+        f"database={database} sql_s3_uri={sql_s3_uri}"
+    )
+
     sql = load_sql_from_s3(sql_s3_uri)
     query_execution_id = run_athena_query(sql, database, output_location, region)
+    print(f"Athena query started. QueryExecutionId={query_execution_id}")
     final_status, failure_reason = wait_for_athena(query_execution_id, region)
 
     if final_status != "SUCCEEDED":
@@ -85,4 +92,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

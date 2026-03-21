@@ -95,6 +95,7 @@ jobs:
       - name: Upload Glue script to S3
         run: |
           set -euo pipefail
+          bash scripts/validate-glue-runner.sh glue/python_shell/runner.py
           aws s3 cp "glue/python_shell/runner.py" \
             "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}" \
             --region "${AWS_REGION}"

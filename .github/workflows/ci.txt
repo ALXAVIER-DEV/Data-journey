@@ -31,3 +31,7 @@ jobs:
         run: |
           test -f glue/python_shell/runner.py
           echo "Glue script OK"
+
+      - name: Validate Glue runner content
+        run: |
+          bash scripts/validate-glue-runner.sh glue/python_shell/runner.py
