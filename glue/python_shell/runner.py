@@ -84,9 +84,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as exc:
-        print(f"Glue runner failed: {exc}")
-        print(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
-        raise
+    main()
+
