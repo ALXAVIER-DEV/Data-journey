@@ -1,13 +1,14 @@
 import os
 import time
+from typing import Dict, Optional, Tuple
 
 import boto3
 from awsglue.utils import getResolvedOptions
 
-RUNNER_VERSION = "2026-03-21.2"
+RUNNER_VERSION = "2026-03-23.1"
 
 
-def get_args() -> dict:
+def get_args() -> Dict[str, str]:
     return getResolvedOptions(
         os.sys.argv,
         [
@@ -47,7 +48,7 @@ def run_athena_query(query: str, database: str, output_location: str, region: st
 
 def wait_for_athena(
     query_execution_id: str, region: str, sleep_seconds: int = 3
-) -> tuple[str, str | None]:
+) -> Tuple[str, Optional[str]]:
     athena = boto3.client("athena", region_name=region)
     while True:
         query_execution = athena.get_query_execution(QueryExecutionId=query_execution_id)[
@@ -92,3 +93,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
