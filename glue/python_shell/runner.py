@@ -47,7 +47,7 @@ def run_athena_query(query, database, output_location, region):
 
 
 def wait_for_athena(
-    query_execution_id, region, sleep_seconds = 3) -> Tuple[str, Optional[str]]:
+    query_execution_id, region, sleep_seconds = 3):
     athena = boto3.client("athena", region_name=region)
     while True:
         query_execution = athena.get_query_execution(QueryExecutionId=query_execution_id)[
@@ -69,7 +69,7 @@ def main():
     sql_s3_uri = args["SQL_S3_URI"]
 
     print(
-        f"Glue Athena runner version={RUNNER_VERSION} region={region} "
+        f"Glue Athena runner version={RUNNER_VERSION} region={region}"
         f"database={database} sql_s3_uri={sql_s3_uri}"
     )
 
