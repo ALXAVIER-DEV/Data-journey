@@ -8,9 +8,9 @@ from awsglue.utils import getResolvedOptions
 RUNNER_VERSION = "2026-03-23.1"
 
 
-def get_args() -> Dict[str, str]:
+def get_args():
     return getResolvedOptions(
-        os.sys.argv,
+        sys.argv,
         [
             "AWS_REGION",
             "ATHENA_DATABASE",
@@ -20,7 +20,7 @@ def get_args() -> Dict[str, str]:
     )
 
 
-def load_sql_from_s3(s3_uri: str) -> str:
+def load_sql_from_s3(s3_uri):
     if not s3_uri.startswith("s3://"):
         raise ValueError("SQL_S3_URI deve estar no formato s3://bucket/chave.sql")
 
@@ -36,7 +36,7 @@ def load_sql_from_s3(s3_uri: str) -> str:
     return response["Body"].read().decode("utf-8")
 
 
-def run_athena_query(query: str, database: str, output_location: str, region: str) -> str:
+def run_athena_query(query, database, output_location, region):
     athena = boto3.client("athena", region_name=region)
     response = athena.start_query_execution(
         QueryString=query,
@@ -47,8 +47,7 @@ def run_athena_query(query: str, database: str, output_location: str, region: st
 
 
 def wait_for_athena(
-    query_execution_id: str, region: str, sleep_seconds: int = 3
-) -> Tuple[str, Optional[str]]:
+    query_execution_id, region, sleep_seconds = 3) -> Tuple[str, Optional[str]]:
     athena = boto3.client("athena", region_name=region)
     while True:
         query_execution = athena.get_query_execution(QueryExecutionId=query_execution_id)[
@@ -62,7 +61,7 @@ def wait_for_athena(
         time.sleep(sleep_seconds)
 
 
-def main() -> None:
+def main():
     args = get_args()
     region = args["AWS_REGION"]
     database = args["ATHENA_DATABASE"]
