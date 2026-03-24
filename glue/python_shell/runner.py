@@ -69,7 +69,7 @@ def main():
     sql_s3_uri = args["SQL_S3_URI"]
 
     print(
-        f"Glue Athena runner version={RUNNER_VERSION} region={region}"
+        f"Glue Athena runner version={RUNNER_VERSION} region={region} "
         f"database={database} sql_s3_uri={sql_s3_uri}"
     )
 
