@@ -311,11 +311,7 @@ jobs:
           cd infra/terraform
           terraform workspace select -or-create=true ${{ inputs.environment }}
 
-          if terraform state list | grep -q '^aws_cloudwatch_log_group\.glue$'; then
-            terraform state rm aws_cloudwatch_log_group.glue
-          else
-            echo "aws_cloudwatch_log_group.glue nao existe no state. Nada a remover."
-          fi
+          terraform state rm aws_cloudwatch_log_group.glue || true
 
       - name: Terraform Plan
         id: terraform-plan
