@@ -246,7 +246,9 @@ resource "aws_glue_job" "athena_exec" {
   default_arguments = {
     "--job-language"           = "python"
     "--TempDir"                = "s3://${local.bucket_name}/tmp/glue/"
-    "--enable-job-insights"    = "true"
+    "--enable-job-insights"              = "true"
+    "--enable-continuous-cloudwatch-log" = "true"
+    "--continuous-log-logGroup"          = local.glue_log_group_name
     "--AWS_REGION"             = var.aws_region
     "--ATHENA_DATABASE"        = "default"
     "--ATHENA_OUTPUT_LOCATION" = "s3://${local.bucket_name}/tmp/athena-results/"
@@ -276,3 +278,4 @@ resource "aws_sns_topic" "ingest" {
     Environment = var.environment
   }
 }
+
