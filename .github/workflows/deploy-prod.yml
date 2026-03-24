@@ -156,6 +156,7 @@ jobs:
               \"Role\": \"$GLUE_ROLE\",
               \"Command\": {
                 \"Name\": \"pythonshell\",
+                \"PythonVersion\": \"3.9\",
                 \"ScriptLocation\": \"s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}\"
               }
             }"
