@@ -2,7 +2,7 @@ CREATE EXTERNAL TABLE IF NOT EXISTS default.raw_bronze_messages (
   message_id string,
   environment string,
   ingested_at string,
-  payload struct<hello:string,`from`:string>,
+  payload struct<hello:string,"from":string>,
   source struct<source_type:string,topic_arn:string,subject:string,published_at:string>
 )
 PARTITIONED BY (date string)
@@ -43,7 +43,7 @@ SELECT
   raw.source.topic_arn AS topic_arn,
   try(from_iso8601_timestamp(raw.source.published_at)) AS published_at,
   raw.payload.hello AS hello,
-  raw.payload.`from` AS origin,
+  raw.payload."from" AS origin,
   json_format(CAST(raw.payload AS json)) AS payload_json,
   current_timestamp AS processed_at,
   raw.date AS date
