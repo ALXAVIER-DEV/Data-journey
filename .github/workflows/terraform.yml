@@ -303,6 +303,20 @@ jobs:
             echo "aws_s3_bucket.data_bucket[0] ja esta no state. Pulando import."
           fi
 
+      - name: Remove legacy Glue log group from Terraform state
+        if: inputs.environment == 'dev'
+        run: |
+          set -euo pipefail
+
+          cd infra/terraform
+          terraform workspace select -or-create=true ${{ inputs.environment }}
+
+          if terraform state list | grep -q '^aws_cloudwatch_log_group\.glue$'; then
+            terraform state rm aws_cloudwatch_log_group.glue
+          else
+            echo "aws_cloudwatch_log_group.glue nao existe no state. Nada a remover."
+          fi
+
       - name: Terraform Plan
         id: terraform-plan
         run: |
