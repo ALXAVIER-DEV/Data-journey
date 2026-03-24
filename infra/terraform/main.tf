@@ -232,11 +232,6 @@ resource "aws_iam_role_policy" "glue_permissions" {
 resource "aws_cloudwatch_log_group" "glue" {
   name              = local.glue_log_group_name
   retention_in_days = var.glue_log_retention_in_days
-
-  tags = {
-    Name        = local.glue_log_group_name
-    Environment = var.environment
-  }
 }
 
 # ============================================================
@@ -289,5 +284,6 @@ resource "aws_sns_topic" "ingest" {
     Environment = var.environment
   }
 }
+
 
 
