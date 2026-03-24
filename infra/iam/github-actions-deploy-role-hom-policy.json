@@ -61,6 +61,45 @@
                           "Resource":  "arn:aws:glue:sa-east-1:584047610071:job/hom-axcloud-lab-glue-shell-athena-exec"
                       },
                       {
+                          "Sid":  "ManageSnsSubscriptionsForHom",
+                          "Effect":  "Allow",
+                          "Action":  [
+                                         "sns:GetSubscriptionAttributes",
+                                         "sns:ListSubscriptionsByTopic",
+                                         "sns:SetSubscriptionAttributes",
+                                         "sns:Subscribe",
+                                         "sns:Unsubscribe"
+                                     ],
+                          "Resource":  "*"
+                      },
+                      {
+                          "Sid":  "ManageSqsQueueForHom",
+                          "Effect":  "Allow",
+                          "Action":  [
+                                         "sqs:CreateQueue",
+                                         "sqs:DeleteQueue",
+                                         "sqs:GetQueueAttributes",
+                                         "sqs:GetQueueUrl",
+                                         "sqs:ListQueueTags",
+                                         "sqs:SetQueueAttributes",
+                                         "sqs:TagQueue",
+                                         "sqs:UntagQueue"
+                                     ],
+                          "Resource":  "*"
+                      },
+                      {
+                          "Sid":  "ManageLambdaEventSourceMappingsForHom",
+                          "Effect":  "Allow",
+                          "Action":  [
+                                         "lambda:CreateEventSourceMapping",
+                                         "lambda:DeleteEventSourceMapping",
+                                         "lambda:GetEventSourceMapping",
+                                         "lambda:ListEventSourceMappings",
+                                         "lambda:UpdateEventSourceMapping"
+                                     ],
+                          "Resource":  "*"
+                      },
+                      {
                           "Sid":  "ManageSnsTopicForHom",
                           "Effect":  "Allow",
                           "Action":  [

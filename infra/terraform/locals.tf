@@ -5,6 +5,7 @@ locals {
   lambda_function_name = "${local.prefix}-lambda-ingest"
   glue_job_name        = "${local.prefix}-glue-shell-athena-exec"
   sns_topic_name       = "${local.prefix}-topic-ingest"
+  sqs_queue_name       = "${local.prefix}-queue-ingest"
 
   lambda_role_name    = "${local.lambda_function_name}-role"
   glue_role_name      = "${local.glue_job_name}-role"

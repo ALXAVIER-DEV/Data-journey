@@ -1,142 +1,148 @@
 import json
 import os
-import time
+import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Tuple
 
 import boto3
-from botocore.exceptions import ClientError
 
 
 @dataclass
-class AthenaConfig:
-    database: str
-    output_location: str
-    workgroup: str
-    region_name: str
+class IngestConfig:
+    bucket_name: str
+    bronze_prefix: str
+    environment: str
 
     @classmethod
-    def from_env(cls) -> "AthenaConfig":
+    def from_env(cls) -> "IngestConfig":
         return cls(
-            database=os.getenv("ATHENA_DATABASE", "default"),
-            output_location=os.getenv("ATHENA_OUTPUT_LOCATION", ""),
-            workgroup=os.getenv("ATHENA_WORKGROUP", "primary"),
-            region_name=os.getenv("AWS_REGION", "us-east-1"),
+            bucket_name=os.environ["S3_BUCKET"],
+            bronze_prefix=os.getenv("BRONZE_PREFIX", "bronze"),
+            environment=os.getenv("ENVIRONMENT", "dev"),
         )
 
-    def validate(self) -> None:
-        if not self.output_location:
-            raise ValueError("ATHENA_OUTPUT_LOCATION nao foi informado.")
-
-        if not self.output_location.startswith("s3://"):
-            raise ValueError(
-                "ATHENA_OUTPUT_LOCATION invalido. Use o formato s3://bucket/prefixo/"
-            )
-
-
-class AthenaQueryService:
-    def __init__(self, config: AthenaConfig):
-        self.config = config
-        self.config.validate()
-        self.client = boto3.client("athena", region_name=self.config.region_name)
-
-    def start_query(self, query: str) -> str:
-        response = self.client.start_query_execution(
-            QueryString=query,
-            QueryExecutionContext={"Database": self.config.database},
-            ResultConfiguration={"OutputLocation": self.config.output_location},
-            WorkGroup=self.config.workgroup,
-        )
-        return response["QueryExecutionId"]
-
-    def get_query_status(self, query_execution_id: str) -> Dict[str, Any]:
-        response = self.client.get_query_execution(
-            QueryExecutionId=query_execution_id
-        )
-        return response["QueryExecution"]["Status"]
-
-    def wait_for_completion(
-        self,
-        query_execution_id: str,
-        poll_seconds: int = 2,
-        timeout_seconds: int = 60,
-    ) -> Dict[str, Any]:
-        elapsed = 0
-
-        while elapsed < timeout_seconds:
-            status = self.get_query_status(query_execution_id)
-            state = status["State"]
-
-            if state in ("SUCCEEDED", "FAILED", "CANCELLED"):
-                return status
-
-            time.sleep(poll_seconds)
-            elapsed += poll_seconds
-
-        raise TimeoutError(
-            f"Tempo limite excedido aguardando a query {query_execution_id}."
+    def build_object_key(self, message_id: str, ingested_at: datetime) -> str:
+        date_partition = ingested_at.strftime("%Y%m%d")
+        return (
+            f"{self.bronze_prefix}/raw/date={date_partition}/"
+            f"message_id={message_id}.json"
         )
 
 
-class LambdaResponseFactory:
-    @staticmethod
-    def success(body: Dict[str, Any], status_code: int = 200) -> Dict[str, Any]:
-        return {
-            "statusCode": status_code,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(body, ensure_ascii=False),
-        }
+class S3DataLakeWriter:
+    def __init__(self, bucket_name: str):
+        self.bucket_name = bucket_name
+        self.client = boto3.client("s3")
 
-    @staticmethod
-    def error(message: str, status_code: int = 500) -> Dict[str, Any]:
-        return {
-            "statusCode": status_code,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": message}, ensure_ascii=False),
-        }
+    def write_json(self, key: str, payload: Dict[str, Any]) -> None:
+        self.client.put_object(
+            Bucket=self.bucket_name,
+            Key=key,
+            Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            ContentType="application/json",
+        )
 
 
-def handler(event: Dict[str, Any], context: Optional[Any]) -> Dict[str, Any]:
+def _parse_json_if_possible(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+
     try:
-        query = event.get("query")
-        wait_for_completion = event.get("wait_for_completion", False)
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
 
-        if not query:
-            return LambdaResponseFactory.error(
-                "Campo 'query' e obrigatorio no evento.",
-                400,
-            )
 
-        config = AthenaConfig.from_env()
-        athena_service = AthenaQueryService(config)
+def _normalize_sqs_record(
+    record: Dict[str, Any], config: IngestConfig
+) -> Tuple[str, Dict[str, Any]]:
+    ingested_at = datetime.now(timezone.utc)
+    envelope = _parse_json_if_possible(record.get("body", ""))
 
-        query_execution_id = athena_service.start_query(query)
-
-        response_body = {
-            "message": "Query enviada com sucesso.",
-            "query_execution_id": query_execution_id,
-            "database": config.database,
-            "workgroup": config.workgroup,
-            "output_location": config.output_location,
+    if isinstance(envelope, dict) and envelope.get("Type") == "Notification":
+        raw_message = envelope.get("Message")
+        message_id = (
+            envelope.get("MessageId") or record.get("messageId") or str(uuid.uuid4())
+        )
+        source_metadata = {
+            "source_type": "sns",
+            "topic_arn": envelope.get("TopicArn"),
+            "subject": envelope.get("Subject"),
+            "published_at": envelope.get("Timestamp"),
+        }
+    else:
+        raw_message = envelope
+        message_id = record.get("messageId") or str(uuid.uuid4())
+        source_metadata = {
+            "source_type": "sqs",
+            "attributes": record.get("attributes", {}),
         }
 
-        if wait_for_completion:
-            final_status = athena_service.wait_for_completion(query_execution_id)
-            response_body["final_status"] = final_status
+    normalized_payload = {
+        "message_id": message_id,
+        "environment": config.environment,
+        "ingested_at": ingested_at.isoformat(),
+        "payload": _parse_json_if_possible(raw_message),
+        "source": source_metadata,
+    }
+    object_key = config.build_object_key(message_id, ingested_at)
+    return object_key, normalized_payload
 
-        return LambdaResponseFactory.success(response_body)
 
-    except ValueError as exc:
-        return LambdaResponseFactory.error(str(exc), 400)
-    except TimeoutError as exc:
-        return LambdaResponseFactory.error(str(exc), 408)
-    except ClientError as exc:
-        return LambdaResponseFactory.error(
-            f"Erro da AWS ao executar Athena: {str(exc)}",
-            500,
-        )
-    except Exception as exc:
-        return LambdaResponseFactory.error(
-            f"Erro inesperado: {str(exc)}",
-            500,
-        )
+def _build_direct_invoke_payload(
+    event: Dict[str, Any], config: IngestConfig
+) -> Tuple[str, Dict[str, Any]]:
+    ingested_at = datetime.now(timezone.utc)
+    message_id = str(uuid.uuid4())
+    normalized_payload = {
+        "message_id": message_id,
+        "environment": config.environment,
+        "ingested_at": ingested_at.isoformat(),
+        "payload": event,
+        "source": {
+            "source_type": "direct-invoke",
+        },
+    }
+    object_key = config.build_object_key(message_id, ingested_at)
+    return object_key, normalized_payload
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    config = IngestConfig.from_env()
+    writer = S3DataLakeWriter(config.bucket_name)
+
+    records: List[Dict[str, Any]] = event.get("Records", [])
+    if not records:
+        object_key, payload = _build_direct_invoke_payload(event, config)
+        writer.write_json(object_key, payload)
+        return {
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "message": "Evento gravado com sucesso no data lake.",
+                    "bucket": config.bucket_name,
+                    "key": object_key,
+                },
+                ensure_ascii=False,
+            ),
+        }
+
+    batch_item_failures = []
+    processed_keys = []
+
+    for record in records:
+        try:
+            object_key, payload = _normalize_sqs_record(record, config)
+            writer.write_json(object_key, payload)
+            processed_keys.append(object_key)
+        except Exception:
+            batch_item_failures.append(
+                {"itemIdentifier": record.get("messageId", str(uuid.uuid4()))}
+            )
+
+    return {
+        "batchItemFailures": batch_item_failures,
+        "processedCount": len(processed_keys),
+        "processedKeys": processed_keys,
+    }

@@ -61,6 +61,45 @@
                           "Resource":  "arn:aws:glue:sa-east-1:584047610071:job/dev-axcloud-lab-glue-shell-athena-exec"
                       },
                       {
+                          "Sid":  "ManageSnsSubscriptionsForDev",
+                          "Effect":  "Allow",
+                          "Action":  [
+                                         "sns:GetSubscriptionAttributes",
+                                         "sns:ListSubscriptionsByTopic",
+                                         "sns:SetSubscriptionAttributes",
+                                         "sns:Subscribe",
+                                         "sns:Unsubscribe"
+                                     ],
+                          "Resource":  "*"
+                      },
+                      {
+                          "Sid":  "ManageSqsQueueForDev",
+                          "Effect":  "Allow",
+                          "Action":  [
+                                         "sqs:CreateQueue",
+                                         "sqs:DeleteQueue",
+                                         "sqs:GetQueueAttributes",
+                                         "sqs:GetQueueUrl",
+                                         "sqs:ListQueueTags",
+                                         "sqs:SetQueueAttributes",
+                                         "sqs:TagQueue",
+                                         "sqs:UntagQueue"
+                                     ],
+                          "Resource":  "*"
+                      },
+                      {
+                          "Sid":  "ManageLambdaEventSourceMappingsForDev",
+                          "Effect":  "Allow",
+                          "Action":  [
+                                         "lambda:CreateEventSourceMapping",
+                                         "lambda:DeleteEventSourceMapping",
+                                         "lambda:GetEventSourceMapping",
+                                         "lambda:ListEventSourceMappings",
+                                         "lambda:UpdateEventSourceMapping"
+                                     ],
+                          "Resource":  "*"
+                      },
+                      {
                           "Sid":  "ManageSnsTopicForDev",
                           "Effect":  "Allow",
                           "Action":  [

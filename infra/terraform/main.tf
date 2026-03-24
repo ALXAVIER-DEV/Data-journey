@@ -62,6 +62,18 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         ]
       },
       {
+        Sid    = "SqsConsumerAccess"
+        Effect = "Allow"
+        Action = [
+          "sqs:ChangeMessageVisibility",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+          "sqs:ReceiveMessage"
+        ]
+        Resource = aws_sqs_queue.ingest.arn
+      },
+      {
         Sid    = "DynamoDBAccess"
         Effect = "Allow"
         Action = [
@@ -143,6 +155,58 @@ resource "aws_lambda_function" "ingest" {
   depends_on = [
     aws_iam_role_policy.lambda_permissions
   ]
+}
+
+resource "aws_sqs_queue" "ingest" {
+  name                       = local.sqs_queue_name
+  visibility_timeout_seconds = max(180, var.lambda_timeout * 6)
+  message_retention_seconds  = 345600
+
+  tags = {
+    Name        = local.sqs_queue_name
+    Environment = var.environment
+  }
+}
+
+resource "aws_sqs_queue_policy" "ingest" {
+  queue_url = aws_sqs_queue.ingest.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowSnsToSendMessages"
+        Effect = "Allow"
+        Principal = {
+          Service = "sns.amazonaws.com"
+        }
+        Action   = "sqs:SendMessage"
+        Resource = aws_sqs_queue.ingest.arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_sns_topic.ingest.arn
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_sns_topic_subscription" "ingest_queue" {
+  topic_arn = aws_sns_topic.ingest.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.ingest.arn
+
+  depends_on = [
+    aws_sqs_queue_policy.ingest
+  ]
+}
+
+resource "aws_lambda_event_source_mapping" "ingest_queue" {
+  event_source_arn = aws_sqs_queue.ingest.arn
+  function_name    = aws_lambda_function.ingest.arn
+  batch_size       = 10
+  enabled          = true
 }
 
 # ============================================================
