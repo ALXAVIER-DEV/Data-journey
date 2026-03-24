@@ -75,7 +75,8 @@ output "sns_topic_name" {
 }
 
 
+
 output "glue_log_group_name" {
   description = "Nome do CloudWatch Log Group do Glue"
-  value       = aws_cloudwatch_log_group.glue.name
+  value       = local.glue_log_group_name
 }
