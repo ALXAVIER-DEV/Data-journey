@@ -19,6 +19,7 @@ jobs:
     environment: dev
 
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       AWS_REGION: sa-east-1
       ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
       S3_BUCKET: dev-axcloud-lab-sa-east-1-data
@@ -32,6 +33,8 @@ jobs:
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
@@ -117,6 +120,7 @@ jobs:
     environment: dev
 
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       AWS_REGION: sa-east-1
       ROLE_TO_ASSUME: arn:aws:iam::584047610071:role/github-actions-deploy-role-axcloud
       S3_BUCKET: dev-axcloud-lab-sa-east-1-data
@@ -132,6 +136,8 @@ jobs:
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
