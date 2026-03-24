@@ -6,8 +6,9 @@ locals {
   glue_job_name        = "${local.prefix}-glue-shell-athena-exec"
   sns_topic_name       = "${local.prefix}-topic-ingest"
 
-  lambda_role_name = "${local.lambda_function_name}-role"
-  glue_role_name   = "${local.glue_job_name}-role"
+  lambda_role_name    = "${local.lambda_function_name}-role"
+  glue_role_name      = "${local.glue_job_name}-role"
+  glue_log_group_name = "/aws-glue/jobs/${local.glue_job_name}"
 
   bronze_prefix = "bronze"
   silver_prefix = "silver"
@@ -19,3 +20,4 @@ locals {
     : data.aws_s3_bucket.existing_data_bucket[0].bucket
   )
 }
+

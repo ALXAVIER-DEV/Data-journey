@@ -229,6 +229,16 @@ resource "aws_iam_role_policy" "glue_permissions" {
   })
 }
 
+resource "aws_cloudwatch_log_group" "glue" {
+  name              = local.glue_log_group_name
+  retention_in_days = var.glue_log_retention_in_days
+
+  tags = {
+    Name        = local.glue_log_group_name
+    Environment = var.environment
+  }
+}
+
 # ============================================================
 # Glue Job
 # ============================================================
@@ -244,15 +254,15 @@ resource "aws_glue_job" "athena_exec" {
   }
 
   default_arguments = {
-    "--job-language"           = "python"
-    "--TempDir"                = "s3://${local.bucket_name}/tmp/glue/"
+    "--job-language"                     = "python"
+    "--TempDir"                          = "s3://${local.bucket_name}/tmp/glue/"
     "--enable-job-insights"              = "true"
     "--enable-continuous-cloudwatch-log" = "true"
     "--continuous-log-logGroup"          = local.glue_log_group_name
-    "--AWS_REGION"             = var.aws_region
-    "--ATHENA_DATABASE"        = "default"
-    "--ATHENA_OUTPUT_LOCATION" = "s3://${local.bucket_name}/tmp/athena-results/"
-    "--SQL_S3_URI"             = "s3://${local.bucket_name}/sql/dml/insert_curated_messages.sql"
+    "--AWS_REGION"                       = var.aws_region
+    "--ATHENA_DATABASE"                  = "default"
+    "--ATHENA_OUTPUT_LOCATION"           = "s3://${local.bucket_name}/tmp/athena-results/"
+    "--SQL_S3_URI"                       = "s3://${local.bucket_name}/sql/dml/insert_curated_messages.sql"
   }
 
   max_capacity = 0.0625
@@ -263,7 +273,8 @@ resource "aws_glue_job" "athena_exec" {
   }
 
   depends_on = [
-    aws_iam_role_policy.glue_permissions
+    aws_iam_role_policy.glue_permissions,
+    aws_cloudwatch_log_group.glue
   ]
 }
 
@@ -278,4 +289,5 @@ resource "aws_sns_topic" "ingest" {
     Environment = var.environment
   }
 }
+
 
