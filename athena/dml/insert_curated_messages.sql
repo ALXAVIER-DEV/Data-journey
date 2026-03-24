@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS default.raw_bronze_messages (
 )
 PARTITIONED BY (date string)
 ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
-LOCATION 's3://dev-axcloud-lab-sa-east-1-data/bronze/raw/'
-TBLPROPERTIES ('has_encrypted_data'='false');
+OUTPYTFORMAT 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+LOCATION 's3://dev-axcloud-lab-sa-east-1-data/bronze/raw/';
 
 MSCK REPAIR TABLE default.raw_bronze_messages;
 
@@ -25,13 +25,10 @@ CREATE TABLE IF NOT EXISTS default.curated_messages (
   processed_at timestamp,
   date string
 )
+PARTITIONED BY (date)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS PARQUET
 LOCATION 's3://dev-axcloud-lab-sa-east-1-data/curated/messages/'
-TBLPROPERTIES (
-  'table_type'='ICEBERG',
-  'format'='PARQUET',
-  'write_compression'='SNAPPY',
-  'partitioning'='ARRAY[''date'']'
-);
 
 DROP TABLE IF EXISTS default.curated_messages_stage;
 
