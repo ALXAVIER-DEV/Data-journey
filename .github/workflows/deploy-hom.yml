@@ -145,23 +145,49 @@ jobs:
         run: |
           set -euo pipefail
 
-          GLUE_ROLE=$(aws glue get-job \
+          JOB_JSON=$(aws glue get-job \
             --job-name "${GLUE_JOB_NAME}" \
             --region "${AWS_REGION}" \
-            --query 'Job.Role' \
-            --output text)
+            --query 'Job' \
+            --output json)
+
+          GLUE_ROLE=$(echo "${JOB_JSON}" | jq -r '.Role')
+
+          echo "Role atual do Glue Job: $GLUE_ROLE"
+
+          JOB_UPDATE=$(echo "${JOB_JSON}" | jq \
+            --arg script_location "s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}" \
+            'del(
+              .AllocatedCapacity,
+              .Command.ScriptLocation,
+              .CreatedOn,
+              .LastModifiedOn,
+              .Name,
+              .MaxRetries,
+              .ExecutionClass,
+              .LogUri,
+              .MaintenanceWindow,
+              .PredecessorRuns,
+              .ProfileName,
+              .State,
+              .WorkerType,
+              .NumberOfWorkers,
+              .SecurityConfiguration,
+              .NotificationProperty,
+              .CodeGenConfigurationNodes,
+              .Connections,
+              .Timeout,
+              .SourceControlDetails,
+              .ExecutionProperty
+            ) |
+            .Command.Name = "pythonshell" |
+            .Command.PythonVersion = "3.9" |
+            .Command.ScriptLocation = $script_location')
 
           aws glue update-job \
             --job-name "${GLUE_JOB_NAME}" \
             --region "${AWS_REGION}" \
-            --job-update "{
-              \"Role\": \"$GLUE_ROLE\",
-              \"Command\": {
-                \"Name\": \"pythonshell\",
-                \"PythonVersion\": \"3.9\",
-                \"ScriptLocation\": \"s3://${S3_BUCKET}/${GLUE_SCRIPT_S3_KEY}\"
-              }
-            }"
+            --job-update "${JOB_UPDATE}"
 
       - name: Smoke test - publish SNS message
         run: |
