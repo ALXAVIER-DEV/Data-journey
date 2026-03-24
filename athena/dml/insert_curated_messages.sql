@@ -29,7 +29,12 @@ STORED AS PARQUET
 LOCATION 's3://dev-axcloud-lab-sa-east-1-data/curated/messages/'
 TBLPROPERTIES ('parquet.compression'='SNAPPY');
 
-INSERT INTO default.curated_messages
+DROP TABLE IF EXISTS default.curated_messages_stage;
+
+CREATE TABLE default.curated_messages_stage
+WITH (
+  format = 'PARQUET'
+) AS
 SELECT
   raw.message_id,
   raw.environment,
@@ -42,7 +47,33 @@ SELECT
   json_format(CAST(raw.payload AS json)) AS payload_json,
   current_timestamp AS processed_at,
   raw.date AS date
-FROM default.raw_bronze_messages raw
+FROM (
+  SELECT
+    raw.*,
+    row_number() OVER (
+      PARTITION BY raw.message_id
+      ORDER BY raw.ingested_at DESC
+    ) AS row_num
+  FROM default.raw_bronze_messages raw
+) raw
 LEFT JOIN default.curated_messages curated
   ON raw.message_id = curated.message_id
-WHERE curated.message_id IS NULL;
+WHERE raw.row_num = 1
+  AND curated.message_id IS NULL;
+
+INSERT INTO default.curated_messages
+SELECT
+  message_id,
+  environment,
+  ingested_at,
+  source_type,
+  topic_arn,
+  published_at,
+  hello,
+  origin,
+  payload_json,
+  processed_at,
+  date
+FROM default.curated_messages_stage;
+
+DROP TABLE IF EXISTS default.curated_messages_stage;
