@@ -51,6 +51,7 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         Sid    = "S3Access"
         Effect = "Allow"
         Action = [
+          "s3:GetBucketLocation",
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
