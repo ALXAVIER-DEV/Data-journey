@@ -1,4 +1,4 @@
-CREATE EXTERNAL TABLE IF NOT EXISTS default.raw_bronze_messages (
+CREATE TABLE IF NOT EXISTS default.raw_bronze_messages (
   message_id string,
   environment string,
   ingested_at string,
@@ -12,7 +12,7 @@ TBLPROPERTIES ('has_encrypted_data'='false');
 
 MSCK REPAIR TABLE default.raw_bronze_messages;
 
-CREATE EXTERNAL TABLE IF NOT EXISTS default.curated_messages (
+CREATE TABLE IF NOT EXISTS default.curated_messages (
   message_id string,
   environment string,
   ingested_at timestamp,
@@ -22,12 +22,16 @@ CREATE EXTERNAL TABLE IF NOT EXISTS default.curated_messages (
   hello string,
   origin string,
   payload_json string,
-  processed_at timestamp
+  processed_at timestamp,
+  date string
 )
-PARTITIONED BY (date string)
-STORED AS PARQUET
 LOCATION 's3://dev-axcloud-lab-sa-east-1-data/curated/messages/'
-TBLPROPERTIES ('parquet.compression'='SNAPPY');
+TBLPROPERTIES (
+  'table_type'='ICEBERG',
+  'format'='PARQUET',
+  'write_compression'='SNAPPY',
+  'partitioning'='ARRAY[''date'']'
+);
 
 DROP TABLE IF EXISTS default.curated_messages_stage;
 
