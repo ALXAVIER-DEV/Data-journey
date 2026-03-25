@@ -12,7 +12,7 @@ CREATE TABLE default.curated_messages (
   date string
 )
 PARTITIONED BY (`date`)
-LOCATION 's3://dev-axcloud-lab-sa-east-1-data/curated/messages/'
+LOCATION 's3://{{DATA_BUCKET}}/curated/messages/'
 TBLPROPERTIES (
   'table_type'='ICEBERG',
   'format'='PARQUET',

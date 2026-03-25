@@ -1,20 +1,17 @@
-CREATE TABLE default.raw_bronze_messages (
+CREATE EXTERNAL TABLE IF NOT EXISTS default.raw_bronze_messages (
   message_id string,
   environment string,
   ingested_at string,
-  payload row(hello varchar, "from" varchar),
-  source row(source_type varchar, topic_arn varchar, subject varchar, published_at varchar),
-  date string
+  payload struct<hello:string,`from`:string>,
+  source struct<source_type:string,topic_arn:string,subject:string,published_at:string>
 )
-WITH (
-  external_location = 's3://dev-axcloud-lab-sa-east-1-data/bronze/raw/',
-  format = 'JSON',
-  partitioned_by = ARRAY['date']
-);
+PARTITIONED BY (date string)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://{{DATA_BUCKET}}/bronze/raw/';
 
 MSCK REPAIR TABLE default.raw_bronze_messages;
 
-CREATE TABLE default.curated_messages (
+CREATE EXTERNAL TABLE IF NOT EXISTS default.curated_messages (
   message_id string,
   environment string,
   ingested_at timestamp,
@@ -24,35 +21,32 @@ CREATE TABLE default.curated_messages (
   hello string,
   origin string,
   payload_json string,
-  processed_at timestamp,
-  date string
+  processed_at timestamp
 )
-PARTITIONED BY (`date`)
-LOCATION 's3://dev-axcloud-lab-sa-east-1-data/curated/messages/'
-TBLPROPERTIES (
-  'table_type'='ICEBERG',
-  'format'='PARQUET',
-  'write_compression'='SNAPPY',
-  'partitioning'='ARRAY[''date'']'
-);
+PARTITIONED BY (date string)
+STORED AS PARQUET
+LOCATION 's3://{{DATA_BUCKET}}/curated/messages/'
+TBLPROPERTIES ('parquet.compress'='SNAPPY');
 
 DROP TABLE IF EXISTS default.curated_messages_stage;
 
 CREATE TABLE default.curated_messages_stage
 WITH (
-  format = 'PARQUET'
-) AS
+  format = 'PARQUET',
+  external_location = 's3://{{DATA_BUCKET}}/tmp/curated-messages-stage/'
+)
+AS
 SELECT
   raw.message_id,
   raw.environment,
-  from_iso8601_timestamp(raw.ingested_at) AS ingested_at,
+  CAST(at_timezone(from_iso8601_timestamp(raw.ingested_at), 'UTC') AS timestamp) AS ingested_at,
   raw.source.source_type AS source_type,
   raw.source.topic_arn AS topic_arn,
-  try(from_iso8601_timestamp(raw.source.published_at)) AS published_at,
+  CAST(at_timezone(try(from_iso8601_timestamp(raw.source.published_at)), 'UTC') AS timestamp) AS published_at,
   raw.payload.hello AS hello,
   raw.payload."from" AS origin,
   json_format(CAST(raw.payload AS json)) AS payload_json,
-  current_timestamp AS processed_at,
+  CAST(current_timestamp AS timestamp) AS processed_at,
   raw.date AS date
 FROM (
   SELECT

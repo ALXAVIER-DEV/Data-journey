@@ -275,6 +275,7 @@ resource "aws_iam_role_policy" "glue_permissions" {
         Action = [
           "glue:GetDatabase",
           "glue:GetDatabases",
+          "glue:GetPartition",
           "glue:GetTable",
           "glue:GetTables",
           "glue:GetPartitions",
