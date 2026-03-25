@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS default.curated_messages (
+CREATE TABLE default.curated_messages (
   message_id string,
   environment string,
   ingested_at timestamp,
@@ -11,10 +11,11 @@ CREATE TABLE IF NOT EXISTS default.curated_messages (
   processed_at timestamp,
   date string
 )
+PARTITIONED BY (`date`)
 LOCATION 's3://dev-axcloud-lab-sa-east-1-data/curated/messages/'
 TBLPROPERTIES (
   'table_type'='ICEBERG',
   'format'='PARQUET',
   'write_compression'='SNAPPY',
-  'partitioning'='ARRAY[''date'']'
+  'optimize_rewrite_delete_file_threshold'='10'
 );
