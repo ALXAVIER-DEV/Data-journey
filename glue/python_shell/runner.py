@@ -89,6 +89,14 @@ def main():
     sql_s3_uri = args["SQL_S3_URI"]
 
     print(
+        "Resolved Glue arguments: "
+        f"AWS_REGION={region} "
+        f"ATHENA_DATABASE={database} "
+        f"ATHENA_OUTPUT_LOCATION={output_location} "
+        f"SQL_S3_URI={sql_s3_uri}"
+    )
+
+    print(
         f"Glue Athena runner version={RUNNER_VERSION} region={region} "
         f"database={database} sql_s3_uri={sql_s3_uri}"
     )
@@ -101,6 +109,11 @@ def main():
     for index, statement in enumerate(statements, start=1):
         preview = statement.splitlines()[0][:120]
         print(f"Executing statement {index}/{len(statements)}: {preview}")
+        print(
+            f"StartQueryExecution payload: database={database} "
+            f"output_location={output_location} "
+            f"statement_index={index}"
+        )
         query_execution_id = run_athena_query(statement, database, output_location, region)
         print(f"Athena query started. QueryExecutionId={query_execution_id}")
         final_status, failure_reason = wait_for_athena(query_execution_id, region)
