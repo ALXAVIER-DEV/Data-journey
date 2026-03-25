@@ -1,9 +1,9 @@
-CREATE TABLE IF NOT EXISTS default.raw_bronze_messages (
+CREATE TABLE default.raw_bronze_messages (
   message_id string,
   environment string,
   ingested_at string,
-  payload row(hello varchar, "from" varchar),
-  source row(source_type varchar, topic_arn varchar, subject varchar, published_at varchar),
+  payload struct<hello:string,from:string>,
+  source struct<source_type:string,topic_arn:string,subject:string,published_at:string>,
   date string
 )
 WITH (
@@ -14,7 +14,7 @@ WITH (
 
 MSCK REPAIR TABLE default.raw_bronze_messages;
 
-CREATE TABLE IF NOT EXISTS default.curated_messages (
+CREATE TABLE default.curated_messages (
   message_id string,
   environment string,
   ingested_at timestamp,
